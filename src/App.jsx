@@ -1,0 +1,169 @@
+import { useState, useEffect, useCallback } from 'react';
+import { StardogProvider, useStardog } from './contexts/StardogContext';
+import ConnectionSetup from './components/ConnectionSetup';
+import Explorer from './components/Explorer';
+import ReviewQueue from './components/ReviewQueue';
+import AuditLog from './components/AuditLog';
+import AnalyticsView from './components/AnalyticsView';
+import GraphView from './components/GraphView';
+import ImportExport from './components/ImportExport';
+import {
+  BookOpen, Scale, BarChart3, Network, ArrowDownUp,
+  Database, ListChecks, History, LogOut, Moon, Sun, Palette,
+} from 'lucide-react';
+import './index.css';
+
+const THEMES = [
+  { id: 'dark', label: 'Dark', icon: Moon },
+  { id: 'light', label: 'Light', icon: Sun },
+  { id: 'stardog', label: 'Stardog', icon: Palette },
+];
+
+function AppContent() {
+  const { connected, connection, classes, updateConnection, loadOntology } = useStardog();
+  const [activeView, setActiveView] = useState('explore');
+  const [theme, setTheme] = useState(() => localStorage.getItem('vocab_theme') || 'dark');
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('vocab_theme', theme);
+  }, [theme]);
+
+  const cycleTheme = useCallback(() => {
+    const idx = THEMES.findIndex(t => t.id === theme);
+    setTheme(THEMES[(idx + 1) % THEMES.length].id);
+  }, [theme]);
+
+  if (!connected) return <ConnectionSetup />;
+
+  const navItems = [
+    { section: 'Explore' },
+    { id: 'explore', label: 'Vocabulary Explorer', icon: BookOpen },
+    { id: 'graph', label: 'Graph View', icon: Network },
+    { section: 'Govern' },
+    { id: 'queue', label: 'Review Queue', icon: ListChecks },
+    { id: 'audit', label: 'Audit Log', icon: History },
+    { section: 'Analyze' },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { section: 'Tools' },
+    { id: 'import', label: 'Import / Export', icon: ArrowDownUp },
+  ];
+
+  const handleDisconnect = () => {
+    localStorage.removeItem('vocab_connection');
+    updateConnection({ endpoint: '', db: '', token: '', username: '' });
+    window.location.reload();
+  };
+
+  const renderView = () => {
+    switch (activeView) {
+      case 'explore': return <Explorer />;
+      case 'graph': return <GraphView />;
+      case 'queue': return <ReviewQueue />;
+      case 'audit': return <AuditLog />;
+      case 'analytics': return <AnalyticsView />;
+      case 'import': return <ImportExport />;
+      default: return <Explorer />;
+    }
+  };
+
+  return (
+    <div className="app-shell">
+      {/* Sidebar */}
+      <nav className="app-sidebar">
+        <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'linear-gradient(135deg, var(--accent), #7c3aed)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Scale size={17} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2 }}>Vocab Governance</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{classes.length} terms loaded</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', paddingTop: 4 }}>
+          {navItems.map((item, i) => {
+            if (item.section) {
+              return <div key={i} className="nav-section">{item.section}</div>;
+            }
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                className={`nav-item ${activeView === item.id ? 'active' : ''}`}
+                onClick={() => setActiveView(item.id)}
+              >
+                <Icon size={16} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Connection info + theme */}
+        <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Database size={14} color="var(--success)" />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', flex: 1 }} className="truncate">
+              {connection.db}
+            </span>
+          </div>
+          {/* Theme switcher */}
+          <div style={{
+            display: 'flex', gap: 4, marginBottom: 8,
+            padding: 3, background: 'var(--bg-primary)',
+            borderRadius: 'var(--radius-md)',
+          }}>
+            {THEMES.map(t => {
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  title={t.label}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    padding: '5px 6px', borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.68rem', fontWeight: 600,
+                    fontFamily: 'var(--font-sans)',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    border: 'none',
+                    background: theme === t.id ? 'var(--accent)' : 'transparent',
+                    color: theme === t.id ? '#fff' : 'var(--text-muted)',
+                  }}
+                >
+                  <Icon size={12} />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          <button className="btn btn-ghost btn-sm w-full" onClick={handleDisconnect}
+            style={{ justifyContent: 'center' }}>
+            <LogOut size={13} /> Disconnect
+          </button>
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <main className="app-content">
+        {renderView()}
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <StardogProvider>
+      <AppContent />
+    </StardogProvider>
+  );
+}

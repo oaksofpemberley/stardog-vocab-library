@@ -1,0 +1,101 @@
+import { useState } from 'react';
+import { useStardog } from '../contexts/StardogContext';
+import { Database, Key, Globe, Server, Loader2, CheckCircle, XCircle } from 'lucide-react';
+
+export default function ConnectionSetup() {
+  const { connection, updateConnection, loadOntology, loading, error } = useStardog();
+  const [testResult, setTestResult] = useState(null);
+
+  const handleConnect = async () => {
+    setTestResult(null);
+    try {
+      await loadOntology();
+      setTestResult('success');
+    } catch (e) {
+      setTestResult('error');
+    }
+  };
+
+  return (
+    <div className="connection-page">
+      <div className="connection-card fade-in">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: 12,
+            background: 'linear-gradient(135deg, var(--accent), #7c3aed)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Database size={22} color="#fff" />
+          </div>
+          <div>
+            <h2>Vocabulary Governance</h2>
+          </div>
+        </div>
+        <p className="subtitle">Connect to a Stardog Knowledge Graph to browse, govern, and analyze your vocabulary.</p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="form-group">
+            <label className="form-label"><Globe size={12} style={{ marginRight: 4 }} />Stardog Endpoint</label>
+            <input
+              className="input"
+              placeholder="https://your-instance.stardog.cloud:5820"
+              value={connection.endpoint}
+              onChange={e => updateConnection({ endpoint: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label"><Server size={12} style={{ marginRight: 4 }} />Database</label>
+            <input
+              className="input"
+              placeholder="my_knowledge_graph"
+              value={connection.db}
+              onChange={e => updateConnection({ db: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label"><Key size={12} style={{ marginRight: 4 }} />Bearer Token</label>
+            <textarea
+              className="textarea"
+              placeholder="eyJhbGciOiJ..."
+              value={connection.token}
+              onChange={e => updateConnection({ token: e.target.value })}
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', minHeight: 60 }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Your Name (for audit trail)</label>
+            <input
+              className="input"
+              placeholder="jane.doe@org.com"
+              value={connection.username || ''}
+              onChange={e => updateConnection({ username: e.target.value })}
+            />
+          </div>
+
+          <button className="btn btn-primary w-full" onClick={handleConnect} disabled={loading}
+            style={{ justifyContent: 'center', padding: '12px 16px', fontSize: '0.95rem' }}>
+            {loading ? <><Loader2 size={16} className="spin" /> Connecting...</> : 'Connect & Load Ontology'}
+          </button>
+
+          {testResult === 'success' && (
+            <div className="connection-status success fade-in">
+              <CheckCircle size={16} /> Connected successfully
+            </div>
+          )}
+          {(testResult === 'error' || error) && (
+            <div className="connection-status error fade-in">
+              <XCircle size={16} /> {error || 'Connection failed'}
+            </div>
+          )}
+        </div>
+
+        <p style={{ marginTop: 20, fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+          Credentials are stored in your browser's localStorage only.
+        </p>
+      </div>
+    </div>
+  );
+}
