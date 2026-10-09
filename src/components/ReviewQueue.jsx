@@ -1,12 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStardog } from '../contexts/StardogContext';
-import { fetchProposals, createProposal, reviewProposal } from '../lib/governance';
-import { toPrefixed } from '../lib/sparql';
+import { fetchProposals, createProposal, reviewProposal, hasStructuredChange } from '../lib/governance';
+import { toPrefixed, getNamespace } from '../lib/sparql';
+import { MAPPING_RELATIONS, relationLabel } from '../lib/communities';
 import { useDraft } from '../lib/useDraft';
-import { ListChecks, Plus, Check, X, Clock, FileText } from 'lucide-react';
+import { useCommunityData } from '../lib/useCommunityData';
+import { ListChecks, Plus, Check, X, FileText } from 'lucide-react';
+
+const TYPE_BADGE = { add: 'draft', modify: 'review', deprecate: 'deprecated', mapping: 'active' };
+const TYPE_LABEL = { add: 'Add term', modify: 'Modify term', deprecate: 'Deprecate term', mapping: 'Map terms' };
+
+/** Suggested IRI for a new term: the group's namespace + the label in PascalCase */
+function suggestIri(schemeUri, label) {
+  if (!schemeUri || !label) return '';
+  const local = label.trim().split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('');
+  return local ? getNamespace(schemeUri) + local : '';
+}
 
 export default function ReviewQueue() {
-  const { endpoint, db, token, connection, classes, refreshGovernance } = useStardog();
+  const { endpoint, db, token, connection, classes, refreshGovernance, loadOntology } = useStardog();
   const actor = connection.username || 'anonymous';
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,17 +26,25 @@ export default function ReviewQueue() {
   const [reviewError, setReviewError] = useState(null);
 
   // Unsent input survives a refresh (per database) until it is submitted
-  const EMPTY_PROPOSAL = { open: false, type: 'modify', title: '', desc: '', termUri: '' };
+  const EMPTY_PROPOSAL = {
+    open: false, type: 'modify', title: '', desc: '', termUri: '',
+    label: '', definition: '', scheme: '', iri: '', source: '', relation: MAPPING_RELATIONS[1].iri, target: '',
+  };
   const [draft, setDraft] = useDraft(`${db}:proposal`, EMPTY_PROPOSAL);
   const [review, setReview] = useDraft(`${db}:review`, { id: null, comment: '' });
-  const { open: showCreate, type: newType, title: newTitle, desc: newDesc, termUri: newTermUri } = draft;
-  const editDraft = (field) => (value) => setDraft(d => ({ ...d, [field]: value }));
-  const [setNewType, setNewTitle, setNewDesc, setNewTermUri] = ['type', 'title', 'desc', 'termUri'].map(editDraft);
+  const field = (name) => ({ value: draft[name] ?? '', onChange: (e) => setDraft(d => ({ ...d, [name]: e.target.value })) });
   const setShowCreate = (open) => { setError(null); setDraft(d => ({ ...d, open })); };
-  const reviewingId = review.id;
-  const reviewComment = review.comment;
   const setReviewingId = (id) => { setReviewError(null); setReview({ id, comment: '' }); };
-  const setReviewComment = (comment) => setReview(r => ({ ...r, comment }));
+
+  const terms = [...classes].sort((a, b) => (a.label || a.uri).localeCompare(b.label || b.uri));
+  const groups = classes.filter(c => c.type === 'skos:ConceptScheme');
+  // Shared labels ("model" in three groups) are told apart by their group
+  const community = useCommunityData();
+  const termName = (uri) => {
+    const label = classes.find(c => c.uri === uri)?.label || toPrefixed(uri);
+    const concept = community.conceptByUri.get(uri);
+    return concept?.scheme ? `${label} — ${community.schemeLabel(concept.scheme)}` : label;
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,16 +54,26 @@ export default function ReviewQueue() {
     setLoading(false);
   }, [endpoint, db, token]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch from Stardog on mount
   useEffect(() => { load(); }, [load]);
 
   const handleCreate = async () => {
-    if (!newTitle.trim()) return;
     setError(null);
-    if (newType !== 'add' && !newTermUri) { setError('Select the term this proposal applies to.'); return; }
+    const d = draft;
+    const iri = d.type === 'add' ? (d.iri.trim() || suggestIri(d.scheme, d.label)) : '';
+    const title = d.title.trim() || (d.type === 'mapping'
+      ? `${termName(d.source)} ${relationLabel(d.relation)} ${termName(d.target)}`
+      : d.type === 'add' ? `Add "${d.label}"` : `${TYPE_LABEL[d.type]}: ${termName(d.termUri)}`);
     try {
       await createProposal(endpoint, db, token, {
-        termUri: newTermUri, type: newType,
-        title: newTitle, description: newDesc, proposedBy: actor,
+        type: d.type, title, description: d.desc, proposedBy: actor,
+        termUri: d.type === 'modify' || d.type === 'deprecate' ? d.termUri : '',
+        proposedLabel: d.type === 'add' || d.type === 'modify' ? d.label.trim() : '',
+        proposedDefinition: d.type === 'add' || d.type === 'modify' ? d.definition.trim() : '',
+        proposedIri: iri, proposedScheme: d.type === 'add' ? d.scheme : '',
+        mappingSource: d.type === 'mapping' ? d.source : '',
+        mappingRelation: d.type === 'mapping' ? d.relation : '',
+        mappingTarget: d.type === 'mapping' ? d.target : '',
       });
       setDraft(EMPTY_PROPOSAL);
       await load();
@@ -53,14 +83,16 @@ export default function ReviewQueue() {
     }
   };
 
-  const handleReview = async (proposalId, decision) => {
-    if (!reviewComment.trim() && decision === 'rejected') { setReviewError('A comment is required to reject.'); return; }
+  const handleReview = async (proposal, decision) => {
+    if (!review.comment.trim() && decision === 'rejected') { setReviewError('A comment is required to reject.'); return; }
     setReviewError(null);
     try {
-      await reviewProposal(endpoint, db, token, proposalId, decision, actor, reviewComment || 'Approved');
+      await reviewProposal(endpoint, db, token, proposal, decision, actor, review.comment || 'Approved');
       setReview({ id: null, comment: '' });
       await refreshGovernance();
       await load();
+      // An approved change may have edited the vocabulary itself: reload it
+      if (decision === 'approved' && hasStructuredChange(proposal) && proposal.type !== 'mapping') loadOntology();
     } catch (e) {
       console.error('[Vocab] Review failed:', e);
       setReviewError(`Review not saved: ${e.message}`);
@@ -70,6 +102,18 @@ export default function ReviewQueue() {
   const pending = proposals.filter(p => p.status === 'pending');
   const resolved = proposals.filter(p => p.status !== 'pending');
 
+  /** What approving this proposal will change (or changed) */
+  const ChangeSummary = ({ p }) => {
+    const lines = [];
+    if (p.type === 'mapping' && p.mappingSource) lines.push(<><strong>{termName(p.mappingSource)}</strong> {relationLabel(p.mappingRelation)} <strong>{termName(p.mappingTarget)}</strong> → VOCAB:MAPPINGS</>);
+    if (p.type === 'add' && p.proposedIri) lines.push(<>New term <strong>{p.proposedLabel}</strong> in <strong>{termName(p.proposedScheme)}</strong> <span className="mono-muted">{p.proposedIri}</span></>);
+    if (p.type === 'modify' && p.proposedLabel) lines.push(<>Label → <strong>{p.proposedLabel}</strong></>);
+    if (p.type === 'modify' && p.proposedDefinition) lines.push(<>Definition → <strong>{p.proposedDefinition}</strong></>);
+    if (p.type === 'deprecate') lines.push(<>Status → <strong>Deprecated</strong>, and owl:deprecated in the vocabulary</>);
+    if (lines.length === 0) return null;
+    return <div className="change-summary">{lines.map((l, i) => <div key={i}>{l}</div>)}</div>;
+  };
+
   return (
     <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -78,7 +122,7 @@ export default function ReviewQueue() {
             <ListChecks size={22} color="var(--accent)" /> Review Queue
           </h2>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
-            {pending.length} pending proposal{pending.length !== 1 ? 's' : ''}
+            {pending.length} pending proposal{pending.length !== 1 ? 's' : ''} · approving a proposal applies its change
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
@@ -87,50 +131,105 @@ export default function ReviewQueue() {
       </div>
 
       {/* Create Proposal Modal */}
-      {showCreate && (
+      {draft.open && (
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="modal fade-in" onClick={e => e.stopPropagation()}>
             <div className="modal-title">New Change Proposal</div>
-            <div className="modal-subtitle">Propose a change to the vocabulary.</div>
+            <div className="modal-subtitle">Nothing changes until a reviewer approves it.</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="form-group">
                 <label className="form-label">Type</label>
-                <select className="select" value={newType} onChange={e => setNewType(e.target.value)}>
-                  <option value="add">Add New Term</option>
-                  <option value="modify">Modify Existing Term</option>
-                  <option value="deprecate">Deprecate Term</option>
+                <select className="select" {...field('type')}>
+                  {Object.entries(TYPE_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
-              {newType !== 'add' && (
+
+              {(draft.type === 'modify' || draft.type === 'deprecate') && (
                 <div className="form-group">
                   <label className="form-label">Target Term</label>
-                  <select className="select" value={newTermUri} onChange={e => setNewTermUri(e.target.value)}>
+                  <select className="select" {...field('termUri')}>
                     <option value="">Select a term...</option>
-                    {classes.map(c => (
-                      <option key={c.uri} value={c.uri}>{c.label || toPrefixed(c.uri)}</option>
-                    ))}
+                    {terms.map(c => <option key={c.uri} value={c.uri}>{termName(c.uri)}</option>)}
                   </select>
                 </div>
               )}
+
+              {draft.type === 'add' && (
+                <div className="form-group">
+                  <label className="form-label">Group</label>
+                  <select className="select" {...field('scheme')}>
+                    <option value="">Select a group...</option>
+                    {groups.map(g => <option key={g.uri} value={g.uri}>{g.label || toPrefixed(g.uri)}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {(draft.type === 'add' || draft.type === 'modify') && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">{draft.type === 'add' ? 'Label' : 'New label (optional)'}</label>
+                    <input className="input" {...field('label')} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{draft.type === 'add' ? 'Definition' : 'New definition (optional)'}</label>
+                    <textarea className="textarea" {...field('definition')} />
+                  </div>
+                </>
+              )}
+
+              {draft.type === 'add' && (
+                <div className="form-group">
+                  <label className="form-label">IRI</label>
+                  <input className="input" {...field('iri')} placeholder={suggestIri(draft.scheme, draft.label) || 'http://…'} />
+                </div>
+              )}
+
+              {draft.type === 'mapping' && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Source term</label>
+                    <select className="select" {...field('source')}>
+                      <option value="">Select a term...</option>
+                      {terms.map(c => <option key={c.uri} value={c.uri}>{termName(c.uri)}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Relation</label>
+                    <select className="select" {...field('relation')}>
+                      {MAPPING_RELATIONS.map(r => <option key={r.iri} value={r.iri}>{r.label}</option>)}
+                    </select>
+                    <span className="form-help">{MAPPING_RELATIONS.find(r => r.iri === draft.relation)?.help}</span>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Target term</label>
+                    <select className="select" {...field('target')}>
+                      <option value="">Select a term...</option>
+                      {terms.map(c => <option key={c.uri} value={c.uri}>{termName(c.uri)}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+
               <div className="form-group">
-                <label className="form-label">Title</label>
-                <input className="input" value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                  placeholder="Brief description of the change" />
+                <label className="form-label">Title {draft.type !== 'modify' && <span className="muted">(optional)</span>}</label>
+                <input className="input" {...field('title')} placeholder="Brief description of the change" />
               </div>
               <div className="form-group">
-                <label className="form-label">Description</label>
-                <textarea className="textarea" value={newDesc} onChange={e => setNewDesc(e.target.value)}
-                  placeholder="Detailed justification for this change..." />
+                <label className="form-label">{draft.type === 'mapping' ? 'Justification (required)' : 'Description'}</label>
+                <textarea className="textarea" {...field('desc')} placeholder="Detailed justification for this change..." />
               </div>
             </div>
             {error && (
-              <div className="connection-status error" style={{ marginTop: 12 }}>
+              <div className="connection-status error" role="alert" style={{ marginTop: 12 }}>
                 ⚠️ {error}
               </div>
             )}
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleCreate}>Submit Proposal</button>
+              <button className="btn btn-primary" onClick={handleCreate}
+                disabled={draft.type === 'modify' && !draft.title.trim() && !draft.label.trim() && !draft.definition.trim()}>
+                Submit Proposal
+              </button>
             </div>
           </div>
         </div>
@@ -148,12 +247,11 @@ export default function ReviewQueue() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span className={`status-badge status-${p.type === 'deprecate' ? 'deprecated' : p.type === 'add' ? 'draft' : 'review'}`}>
-                        {p.type}
-                      </span>
+                      <span className={`status-badge status-${TYPE_BADGE[p.type] || 'review'}`}>{TYPE_LABEL[p.type] || p.type}</span>
                       <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{p.title}</span>
                     </div>
-                    {p.description && <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '4px 0' }}>{p.description}</p>}
+                    <ChangeSummary p={p} />
+                    {p.description && <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '4px 0', whiteSpace: 'pre-wrap' }}>{p.description}</p>}
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
                       <span>by {p.proposedBy}</span>
                       <span>{new Date(p.date).toLocaleDateString()}</span>
@@ -161,14 +259,14 @@ export default function ReviewQueue() {
                     </div>
                   </div>
 
-                  {reviewingId === p.id ? (
+                  {review.id === p.id ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 16, minWidth: 200 }}>
-                      <input className="input" placeholder="Review comment..." value={reviewComment}
-                        onChange={e => setReviewComment(e.target.value)} />
+                      <input className="input" placeholder="Review comment..." value={review.comment}
+                        onChange={e => setReview(r => ({ ...r, comment: e.target.value }))} />
                       {reviewError && <div className="connection-status error" role="alert">{reviewError}</div>}
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-success btn-sm" onClick={() => handleReview(p.id, 'approved')}><Check size={13} /> Approve</button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleReview(p.id, 'rejected')}><X size={13} /> Reject</button>
+                        <button className="btn btn-success btn-sm" onClick={() => handleReview(p, 'approved')}><Check size={13} /> Approve</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => handleReview(p, 'rejected')}><X size={13} /> Reject</button>
                       </div>
                     </div>
                   ) : (
@@ -192,10 +290,12 @@ export default function ReviewQueue() {
               <div key={p.id} style={{
                 padding: '10px 14px', borderRadius: 'var(--radius-md)',
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
-                display: 'flex', alignItems: 'center', gap: 10, opacity: 0.7,
+                display: 'flex', alignItems: 'center', gap: 10, opacity: 0.8,
               }}>
                 <span className={`status-badge status-${p.status === 'approved' ? 'active' : 'retired'}`}>{p.status}</span>
+                {p.appliedDate && <span className="status-badge status-review" title={`Applied ${new Date(p.appliedDate).toLocaleString()}`}>applied</span>}
                 <span style={{ flex: 1, fontSize: '0.85rem' }}>{p.title}</span>
+                {p.reviewer && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>by {p.reviewer}</span>}
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{new Date(p.date).toLocaleDateString()}</span>
               </div>
             ))}

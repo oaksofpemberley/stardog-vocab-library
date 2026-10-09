@@ -1,0 +1,95 @@
+# Sample: three groups, each with its own SKOS vocabulary in its own named graph.
+# Several labels overlap but mean different things in each group, which is the case
+# the Communities > Shared Terms view is built for.
+#
+# Load into a Stardog database, e.g.:
+#   stardog data add <db> samples/multi-community-vocabulary.trig
+
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix cs:   <http://example.org/vocab/cs#> .
+@prefix phys: <http://example.org/vocab/physics#> .
+@prefix biz:  <http://example.org/vocab/business#> .
+
+<urn:vocab:cs> {
+  cs:Scheme a skos:ConceptScheme ;
+    skos:prefLabel "Computer Science"@en ;
+    skos:definition "Terms as used by the computing and algorithms groups."@en .
+
+  cs:OrdersOfMagnitude a skos:Concept ; skos:inScheme cs:Scheme ;
+    skos:prefLabel "orders of magnitude"@en ;
+    skos:altLabel "asymptotic order"@en ;
+    skos:definition "Differences in growth rate between complexity classes, e.g. O(n) versus O(n^2); constant factors are ignored."@en .
+
+  cs:Model a skos:Concept ; skos:inScheme cs:Scheme ;
+    skos:prefLabel "model"@en ;
+    skos:definition "A trained machine-learning artifact that maps inputs to predictions."@en .
+
+  cs:Validation a skos:Concept ; skos:inScheme cs:Scheme ;
+    skos:prefLabel "validation"@en ;
+    skos:definition "Checking that input data conforms to an expected schema or type before processing."@en .
+
+  cs:Resolution a skos:Concept ; skos:inScheme cs:Scheme ;
+    skos:prefLabel "resolution"@en ;
+    skos:altLabel "name resolution"@en ;
+    skos:definition "Mapping a name or identifier to the address or object it refers to (e.g. DNS)."@en .
+
+  cs:Throughput a skos:Concept ; skos:inScheme cs:Scheme ;
+    skos:prefLabel "throughput"@en ;
+    skos:definition "Units of work completed per unit of time by a system."@en .
+}
+
+<urn:vocab:physics> {
+  phys:Scheme a skos:ConceptScheme ;
+    skos:prefLabel "Physics"@en ;
+    skos:definition "Terms as used by the experimental and computational physics groups."@en ;
+    dct:creator "Physics Terminology Working Group" .
+
+  phys:OrdersOfMagnitude a skos:Concept ; skos:inScheme phys:Scheme ;
+    skos:prefLabel "orders of magnitude"@en ;
+    skos:definition "Powers of ten separating two values of a measured quantity; one order of magnitude is a factor of 10."@en ;
+    # Asserted in the physics group's own data (not governed): shows next to governed mappings
+    skos:relatedMatch cs:OrdersOfMagnitude .
+
+  phys:Model a skos:Concept ; skos:inScheme phys:Scheme ;
+    skos:prefLabel "model"@en ;
+    skos:definition "A mathematical description of a physical system, usually a set of governing equations."@en .
+
+  phys:Validation a skos:Concept ; skos:inScheme phys:Scheme ;
+    skos:prefLabel "validation"@en ;
+    skos:altLabel "model validation"@en ;
+    skos:definition "Determining how accurately a model represents the real world, by comparison with experiment."@en .
+
+  phys:Resolution a skos:Concept ; skos:inScheme phys:Scheme ;
+    skos:prefLabel "resolution"@en ;
+    skos:definition "The smallest difference in a quantity that an instrument can distinguish."@en .
+
+  phys:Uncertainty a skos:Concept ; skos:inScheme phys:Scheme ;
+    skos:prefLabel "uncertainty"@en ;
+    skos:definition "The quantified doubt about a measurement result."@en .
+}
+
+<urn:vocab:business> {
+  biz:Scheme a skos:ConceptScheme ;
+    skos:prefLabel "Business Administration"@en ;
+    skos:definition "Terms as used by finance, planning and program management."@en .
+
+  biz:OrdersOfMagnitude a skos:Concept ; skos:inScheme biz:Scheme ;
+    skos:prefLabel "orders of magnitude"@en ;
+    skos:altLabel "ballpark"@en ;
+    skos:definition "An informal sense of scale for a cost or forecast, e.g. thousands versus millions of dollars."@en .
+
+  biz:Model a skos:Concept ; skos:inScheme biz:Scheme ;
+    skos:prefLabel "model"@en ;
+    skos:altLabel "business model"@en ;
+    skos:definition "How an organization creates, delivers and captures value."@en .
+
+  biz:Validation a skos:Concept ; skos:inScheme biz:Scheme ;
+    skos:prefLabel "validation"@en ;
+    skos:definition "Confirming with stakeholders that a plan or requirement meets their actual need."@en .
+
+  biz:Throughput a skos:Concept ; skos:inScheme biz:Scheme ;
+    skos:prefLabel "throughput"@en ;
+    skos:definition "The rate at which a process generates revenue or completed deliverables."@en .
+}

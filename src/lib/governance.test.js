@@ -21,6 +21,7 @@ const literals = (update) => operations(update)
   .filter(o => o.termType === 'Literal')
   .map(o => o.value);
 
+const ADD = { type: 'add', title: 't', description: '', proposedBy: 'me', proposedScheme: 'urn:scheme', proposedIri: 'urn:new', proposedLabel: 'New term' };
 const PAYLOAD = 'x" . } WHERE {} ; DROP ALL ; DELETE { <urn:a> <urn:b> "c';
 const NASTY = 'Dwayne "The Rock" Johnson \\ C:\\path\nsecond line\ttab';
 
@@ -41,7 +42,7 @@ describe('governance writes are injection-safe and atomic', () => {
     'steward assignment': () => gov.assignSteward('E', 'db', '', 'urn:t', PAYLOAD, 'me'),
     'editorial note': () => gov.addEditorialNote('E', 'db', '', 'urn:t', PAYLOAD, PAYLOAD),
     'proposal': () => gov.createProposal('E', 'db', '', { termUri: 'urn:t', type: 'modify', title: PAYLOAD, description: PAYLOAD, proposedBy: PAYLOAD }),
-    'review': () => gov.reviewProposal('E', 'db', '', 'urn:p', 'rejected', PAYLOAD, PAYLOAD),
+    'review': () => gov.reviewProposal('E', 'db', '', { id: 'urn:p', type: 'modify' }, 'rejected', PAYLOAD, PAYLOAD),
   };
   for (const [name, call] of Object.entries(cases)) {
     it(`${name}: one request, valid SPARQL, no DROP`, async () => {
@@ -67,20 +68,20 @@ describe('governance writes are injection-safe and atomic', () => {
 
   it('rejects values outside the allowed lists', async () => {
     await expect(gov.setTermStatus('E', 'db', '', 'urn:t', 'Active> . } ; DROP ALL', 'me')).rejects.toThrow(/Invalid status/);
-    await expect(gov.reviewProposal('E', 'db', '', 'urn:p', 'maybe', 'me', '')).rejects.toThrow(/Invalid decision/);
+    await expect(gov.reviewProposal('E', 'db', '', { id: 'urn:p', type: 'modify' }, 'maybe', 'me', '')).rejects.toThrow(/Invalid decision/);
     expect(sent).toHaveLength(0);
   });
 
   it('requires a target term for modify/deprecate, and omits it for add', async () => {
     await expect(gov.createProposal('E', 'db', '', { type: 'deprecate', title: 't', description: '', proposedBy: 'me' })).rejects.toThrow(/Select the term/);
-    const id = await gov.createProposal('E', 'db', '', { type: 'add', title: 't', description: '', proposedBy: 'me' });
+    const id = await gov.createProposal('E', 'db', '', ADD);
     const proposalTriples = operations(sent[0])[0].insert[0].triples.filter(t => t.subject.value === id);
     expect(proposalTriples.some(t => t.predicate.value.endsWith('targetTerm'))).toBe(false);
   });
 
   it('gives every record a unique id', async () => {
     const ids = await Promise.all(Array.from({ length: 50 }, () =>
-      gov.createProposal('E', 'db', '', { type: 'add', title: 't', description: '', proposedBy: 'me' })));
+      gov.createProposal('E', 'db', '', ADD)));
     expect(new Set(ids).size).toBe(50);
   });
 });

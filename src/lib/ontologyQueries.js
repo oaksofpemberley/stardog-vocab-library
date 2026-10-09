@@ -162,3 +162,60 @@ SELECT ?relationship ?relatedTerm ?relatedLabel WHERE {
 export function instanceCountQuery(classUri) {
   return `SELECT (COUNT(?s) AS ?count) WHERE { ?s a ${sparqlIri(classUri)} }`;
 }
+
+/* ── Communities: SKOS concept schemes, concepts and mappings ── */
+
+/** Concept schemes (groups) with label, description, declared owner and concept count */
+export const SCHEMES_QUERY = `
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX dct: <http://purl.org/dc/terms/>
+
+SELECT ?scheme (SAMPLE(?l) AS ?label) (SAMPLE(?d) AS ?definition) (SAMPLE(?o) AS ?declaredOwner)
+       (COUNT(DISTINCT ?c) AS ?concepts) WHERE {
+  ?scheme a skos:ConceptScheme .
+  OPTIONAL { ?scheme skos:prefLabel|rdfs:label|dct:title ?l }
+  OPTIONAL { ?scheme skos:definition|rdfs:comment|dct:description ?d }
+  OPTIONAL { ?scheme dct:creator|dct:publisher ?o }
+  OPTIONAL { ?c skos:inScheme|skos:topConceptOf ?scheme }
+  FILTER(!isBlank(?scheme))
+}
+GROUP BY ?scheme
+ORDER BY ?label
+`;
+
+/** SKOS concepts with their scheme, labels and definition. altLabels are joined with U+001F. */
+export const CONCEPTS_QUERY = `
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?concept ?scheme (SAMPLE(?pl) AS ?prefLabel) (SAMPLE(?def) AS ?definition)
+       (GROUP_CONCAT(DISTINCT ?al; separator="\\u001f") AS ?altLabels) WHERE {
+  ?concept a skos:Concept .
+  OPTIONAL { ?concept skos:inScheme|skos:topConceptOf ?scheme }
+  OPTIONAL { ?concept skos:prefLabel ?pl }
+  OPTIONAL { ?concept skos:altLabel ?al }
+  OPTIONAL { ?concept skos:definition ?def }
+  FILTER(!isBlank(?concept))
+}
+GROUP BY ?concept ?scheme
+`;
+
+/** Every SKOS mapping triple, with the named graph it lives in (VOCAB:MAPPINGS = governed) */
+export const MAPPINGS_QUERY = `
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT DISTINCT ?source ?relation ?target ?g WHERE {
+  VALUES ?relation { skos:exactMatch skos:closeMatch skos:broadMatch skos:narrowMatch skos:relatedMatch }
+  GRAPH ?g { ?source ?relation ?target }
+}
+`;
+
+/** The named graph(s) holding a term's rdf:type, i.e. where an approved change to it is written */
+export function homeGraphQuery(termUri) {
+  return `
+SELECT DISTINCT ?g ?type WHERE {
+  GRAPH ?g { ${sparqlIri(termUri)} a ?type }
+  FILTER(?g NOT IN (<VOCAB:GOVERNANCE>, <VOCAB:MAPPINGS>))
+}
+`;
+}

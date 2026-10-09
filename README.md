@@ -9,6 +9,9 @@ A modern, browser-based vocabulary governance tool for browsing, managing, and a
 - **Ontology Explorer** — Browse classes and properties with namespace-grouped sidebar, search, and status filtering
 - **Graph Visualization** — Interactive D3-powered force-directed graph of class relationships with namespace coloring and lifecycle status indicators
 - **Governance Workflows** — Assign lifecycle statuses (Active, Draft, Under Review, Deprecated, Retired) to any term with full audit logging
+- **Communities** — Each group's SKOS concept scheme shown with its owner; **Shared Terms** puts one label's different meanings side by side; **Mappings** lists asserted, approved, pending and rejected mappings between groups (see [docs/communities-and-mappings.md](docs/communities-and-mappings.md))
+- **Governed changes** — Proposals to add, modify, deprecate or map terms go through review; approving one applies the change (mappings go to the `VOCAB:MAPPINGS` graph) together with its audit entry
+- **Designer View** — Hierarchical class diagram with property counts and lifecycle status
 - **Impact Analysis** — Analyze upstream/downstream dependencies before making changes to your vocabulary
 - **SHACL Constraints** — View SHACL shapes and validation rules associated with classes
 - **Import & Export** — Export vocabularies as Turtle, JSON-LD, or CSV
@@ -37,6 +40,13 @@ npm run dev
 ```
 
 Open [http://localhost:5180](http://localhost:5180), pick a database from the dropdown, and connect. Switch databases any time from the selector at the bottom of the sidebar.
+
+To try the Communities features, load the sample (three groups that define "orders of magnitude", "model", "validation" and more differently):
+
+```bash
+stardog-admin db create -n vocab_communities_demo
+stardog data add vocab_communities_demo samples/multi-community-vocabulary.trig
+```
 
 ### Configuration
 
@@ -140,24 +150,30 @@ src/
 ├── components/
 │   ├── AnalyticsView.jsx      # Vocabulary health dashboard
 │   ├── AuditLog.jsx           # Change history viewer
+│   ├── CommunityParts.jsx     # Mapping badges and the propose-mapping form
 │   ├── ConnectionSetup.jsx    # Stardog connection form
 │   ├── DesignerView.jsx       # Hierarchical class diagram
 │   ├── ErrorBoundary.jsx      # Keeps a crash in one view from blanking the app
 │   ├── Explorer.jsx           # Main ontology browser
 │   ├── GovernancePanel.jsx    # Lifecycle status management
 │   ├── GraphView.jsx          # D3 force-directed graph
+│   ├── GroupsView.jsx         # Communities: groups (concept schemes) and owners
 │   ├── ImpactAnalysis.jsx     # Dependency analysis
 │   ├── ImportExport.jsx       # Vocabulary export (Turtle/JSON-LD/CSV)
+│   ├── MappingsView.jsx       # Communities: all mappings and their status
 │   ├── NamespaceSidebar.jsx   # Namespace-grouped term list
 │   ├── ReviewQueue.jsx        # Governance review workflow
 │   ├── SearchBar.jsx          # Search and filter controls
+│   ├── SharedTermsView.jsx    # Communities: same term, different meanings
 │   └── TermDetail.jsx         # Class/property detail view
 ├── contexts/
 │   └── StardogContext.jsx     # Stardog connection & data state
 ├── lib/
 │   ├── sparql.js              # SPARQL client, escaping (sparqlString/sparqlIri)
 │   ├── governance.js          # Governance reads/writes (VOCAB:GOVERNANCE graph)
-│   ├── ontologyQueries.js     # Ontology introspection queries
+│   ├── ontologyQueries.js     # Ontology, scheme, concept and mapping queries
+│   ├── communities.js         # Shared-term detection, mapping relations
+│   ├── useCommunityData.js    # Data for the Communities views
 │   ├── exporters.js           # Turtle / JSON-LD / CSV export
 │   ├── layout.js              # Cycle-safe diagram layering
 │   ├── storage.js             # Safe browser storage

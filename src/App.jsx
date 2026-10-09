@@ -9,11 +9,14 @@ import GraphView from './components/GraphView';
 import DesignerView from './components/DesignerView';
 import ImportExport from './components/ImportExport';
 import ErrorBoundary from './components/ErrorBoundary';
+import GroupsView from './components/GroupsView';
+import SharedTermsView from './components/SharedTermsView';
+import MappingsView from './components/MappingsView';
 import { readHash, updateHash } from './lib/urlState';
 import { loadText, saveText } from './lib/storage';
 import {
   BookOpen, Scale, BarChart3, Network, ArrowDownUp, LayoutGrid,
-  Database, ListChecks, History, LogOut, Moon, Sun, Palette,
+  Database, ListChecks, History, LogOut, Moon, Sun, Palette, Users, GitCompareArrows, Waypoints,
 } from 'lucide-react';
 import './index.css';
 
@@ -55,6 +58,10 @@ function AppContent() {
     { id: 'explore', label: 'Vocabulary Explorer', icon: BookOpen },
     { id: 'graph', label: 'Graph View', icon: Network },
     { id: 'designer', label: 'Designer View', icon: LayoutGrid },
+    { section: 'Communities' },
+    { id: 'groups', label: 'Groups', icon: Users },
+    { id: 'shared', label: 'Shared Terms', icon: GitCompareArrows },
+    { id: 'mappings', label: 'Mappings', icon: Waypoints },
     { section: 'Govern' },
     { id: 'queue', label: 'Review Queue', icon: ListChecks },
     { id: 'audit', label: 'Audit Log', icon: History },
@@ -69,6 +76,9 @@ function AppContent() {
       case 'explore': return <Explorer />;
       case 'graph': return <GraphView />;
       case 'designer': return <DesignerView />;
+      case 'groups': return <GroupsView />;
+      case 'shared': return <SharedTermsView />;
+      case 'mappings': return <MappingsView />;
       case 'queue': return <ReviewQueue />;
       case 'audit': return <AuditLog />;
       case 'analytics': return <AnalyticsView />;
