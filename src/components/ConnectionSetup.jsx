@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import { Database, Key, Globe, Server, Loader2, CheckCircle, XCircle, UserCheck } from 'lucide-react';
 
-export default function ConnectionSetup() {
+export default function ConnectionSetup({ onOpenHelp }) {
   const { connection, updateConnection, loadOntology, signIn, loading, error, databases, refreshDatabases } = useStardog();
   const [testResult, setTestResult] = useState(null);
   const [signInError, setSignInError] = useState(null);
@@ -135,6 +135,11 @@ export default function ConnectionSetup() {
         <p style={{ marginTop: 20, fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
           Endpoint and name are remembered in this browser. Passwords are never stored; a sign-in token is kept only until the tab closes.
         </p>
+        {onOpenHelp && (
+          <p style={{ marginTop: 8, fontSize: '0.8rem', textAlign: 'center' }}>
+            New here? <button className="link-button" onClick={onOpenHelp}>Read the quick start</button>
+          </p>
+        )}
       </div>
     </div>
   );

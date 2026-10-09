@@ -12,11 +12,12 @@ import ErrorBoundary from './components/ErrorBoundary';
 import GroupsView from './components/GroupsView';
 import SharedTermsView from './components/SharedTermsView';
 import MappingsView from './components/MappingsView';
+import HelpView from './components/HelpView';
 import { readHash, updateHash } from './lib/urlState';
 import { loadText, saveText } from './lib/storage';
 import {
   BookOpen, Scale, BarChart3, Network, ArrowDownUp, LayoutGrid,
-  Database, ListChecks, History, LogOut, Moon, Sun, Palette, Users, GitCompareArrows, Waypoints,
+  Database, ListChecks, History, LogOut, Moon, Sun, Palette, Users, GitCompareArrows, Waypoints, Rocket, LifeBuoy,
 } from 'lucide-react';
 import './index.css';
 
@@ -31,6 +32,10 @@ function AppContent() {
   // The current page lives in the URL hash so a refresh returns to it
   const [activeView, setActiveView] = useState(() => readHash().get('view') || 'explore');
   const [theme, setTheme] = useState(() => loadText('local', 'vocab_theme') || 'dark');
+  // Help can be opened before connecting, from the connection form
+  const [helpBeforeConnect, setHelpBeforeConnect] = useState(false);
+  // Opening a page starts it fresh: drop the help article and search left in the URL
+  const openView = useCallback((view) => { updateHash({ article: null, hq: null }); setActiveView(view); }, []);
 
   // Apply theme to document
   useEffect(() => {
@@ -51,7 +56,11 @@ function AppContent() {
     setTheme(THEMES[(idx + 1) % THEMES.length].id);
   }, [theme]);
 
-  if (!connected) return <ConnectionSetup />;
+  if (!connected) {
+    return helpBeforeConnect
+      ? <HelpView start="quick-start" onClose={() => { updateHash({ article: null, hq: null }); setHelpBeforeConnect(false); }} />
+      : <ConnectionSetup onOpenHelp={() => setHelpBeforeConnect(true)} />;
+  }
 
   const navItems = [
     { section: 'Explore' },
@@ -69,6 +78,9 @@ function AppContent() {
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { section: 'Tools' },
     { id: 'import', label: 'Import / Export', icon: ArrowDownUp },
+    { section: 'Help' },
+    { id: 'quickstart', label: 'Quick Start', icon: Rocket },
+    { id: 'help', label: 'Help & Docs', icon: LifeBuoy },
   ];
 
   const renderView = () => {
@@ -83,6 +95,8 @@ function AppContent() {
       case 'audit': return <AuditLog />;
       case 'analytics': return <AnalyticsView />;
       case 'import': return <ImportExport />;
+      case 'quickstart': return <HelpView key="quickstart" start="quick-start" onNavigate={openView} />;
+      case 'help': return <HelpView key="help" start="overview" onNavigate={openView} />;
       default: return <Explorer />;
     }
   };
@@ -117,7 +131,7 @@ function AppContent() {
               <button
                 key={item.id}
                 className={`nav-item ${activeView === item.id ? 'active' : ''}`}
-                onClick={() => setActiveView(item.id)}
+                onClick={() => openView(item.id)}
               >
                 <Icon size={16} />
                 {item.label}
@@ -186,7 +200,7 @@ function AppContent() {
               );
             })}
           </div>
-          <button className="btn btn-ghost btn-sm w-full" onClick={disconnect}
+          <button className="btn btn-ghost btn-sm w-full" onClick={() => { setHelpBeforeConnect(false); disconnect(); }}
             style={{ justifyContent: 'center' }}>
             <LogOut size={13} /> Disconnect
           </button>
