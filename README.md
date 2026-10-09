@@ -135,10 +135,12 @@ It uses only Stardog's HTTP API and is safe to re-run. Each run rebuilds the dat
 
 | Account | Reads | May write | So it can |
 |---------|-------|-----------|-----------|
-| `vocab_app` (the app's shared proxy account) | everything in the database | `VOCAB:GOVERNANCE` | propose and comment; not apply any change |
+| `vocab_app` (the app's shared proxy account) | everything in the database | `VOCAB:GOVERNANCE` | propose, comment and review; not apply any change |
 | `alice` (Physics owner) | everything | `VOCAB:GOVERNANCE`, `urn:vocab:physics`, `VOCAB:MAPPINGS` | apply changes to Physics, write approved mappings |
 | `bob` (Business owner) | everything | `VOCAB:GOVERNANCE`, `urn:vocab:business`, `VOCAB:MAPPINGS` | apply changes to Business, write approved mappings |
 | `carol` (member) | everything | `VOCAB:GOVERNANCE` | propose and comment only |
+
+Outside the secured database, `vocab_app` may read the databases in `VOCAB_APP_READ_DBS` (default: all, so the app can browse every database). It may write only those in `VOCAB_APP_WRITE_DBS` (default: the secured database and `vocab_communities_demo`). Anyone who can reach the app's dev server acts as `vocab_app`, so keep the write list short; to govern another database without signing in, add it there. The script passes credentials through a private temporary file and stdin, never on the command line.
 
 Then put the `vocab_app` lines from `demo-accounts.local` in `.env`, restart `npm run dev`, sign in as alice, and in **Communities → Groups** assign Physics → account `alice` and Business Administration → account `bob`, then turn on owner approval. What to expect:
 

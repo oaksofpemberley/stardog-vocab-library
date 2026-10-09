@@ -13,24 +13,37 @@
 #   alice (Physics owner)    also write urn:vocab:physics  and VOCAB:MAPPINGS
 #   bob   (Business owner)   also write urn:vocab:business and VOCAB:MAPPINGS
 #   carol (member)           nothing more: can propose, cannot change any vocabulary or mapping
-# The app's shared account (vocab_app) is not an admin: it can read and write data in databases,
-# but cannot create or drop databases or manage users.
+# The app's shared account (vocab_app) is not an admin. It may read the databases in
+# VOCAB_APP_READ_DBS (default: all, so the app can browse every database) and write only those in
+# VOCAB_APP_WRITE_DBS (default: this database and the open quick-start database). Anyone who can reach
+# the app's dev server acts as vocab_app, so keep the write list short.
+#
+# Credentials never appear on a command line (other local users could read them with ps): curl
+# reads the admin login from a private temporary config file and request bodies from stdin.
 set -euo pipefail
 
 URL="${STARDOG_URL:-http://localhost:5820}"
-ADMIN="${STARDOG_ADMIN_USER:?set STARDOG_ADMIN_USER}:${STARDOG_ADMIN_PASSWORD:?set STARDOG_ADMIN_PASSWORD}"
+: "${STARDOG_ADMIN_USER:?set STARDOG_ADMIN_USER}" "${STARDOG_ADMIN_PASSWORD:?set STARDOG_ADMIN_PASSWORD}"
 DB="${1:-vocab_communities_secured}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/demo-accounts.local"
 JSON='Content-Type: application/json'
+READ_DBS="${VOCAB_APP_READ_DBS:-*}"
+WRITE_DBS="${VOCAB_APP_WRITE_DBS:-$DB vocab_communities_demo}"
 
-# api METHOD PATH [JSON]  → prints the HTTP status; the response body is kept in $BODY_FILE
-BODY_FILE=$(mktemp); trap 'rm -f "$BODY_FILE"' EXIT
+# Admin login in a private curl config file (printf is a shell builtin, so nothing shows in ps)
+umask 077
+CFG=$(mktemp); BODY_FILE=$(mktemp); trap 'rm -f "$CFG" "$BODY_FILE"' EXIT
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+printf 'user = "%s:%s"\n' "$(esc "$STARDOG_ADMIN_USER")" "$(esc "$STARDOG_ADMIN_PASSWORD")" > "$CFG"
+
+# api METHOD PATH [JSON]  → prints the HTTP status; the response body is kept in $BODY_FILE.
+# The JSON body (which may contain a password) is sent on stdin, not as an argument.
 api() {
   if [ $# -ge 3 ]; then
-    curl -s -o "$BODY_FILE" -w '%{http_code}' -u "$ADMIN" -X "$1" -H "$JSON" -d "$3" "$URL$2"
+    printf '%s' "$3" | curl -s -K "$CFG" -o "$BODY_FILE" -w '%{http_code}' -X "$1" -H "$JSON" --data-binary @- "$URL$2"
   else
-    curl -s -o "$BODY_FILE" -w '%{http_code}' -u "$ADMIN" -X "$1" "$URL$2"
+    curl -s -K "$CFG" -o "$BODY_FILE" -w '%{http_code}' -X "$1" "$URL$2"
   fi
 }
 expect() { # expect "what" status allowed...  (an "already exists" answer also counts as success)
@@ -44,20 +57,23 @@ chars() { printf '%s' "$1" | sed 's/./"&",/g; s/,$//'; } # "abc" → "a","b","c"
 
 echo "→ database $DB (rebuilt from the sample)"
 api DELETE "/admin/databases/$DB" > /dev/null || true
-status=$(curl -s -o /dev/null -w '%{http_code}' -u "$ADMIN" -X POST "$URL/admin/databases" \
+status=$(curl -s -K "$CFG" -o /dev/null -w '%{http_code}' -X POST "$URL/admin/databases" \
   -F "root={\"dbname\":\"$DB\",\"options\":{\"security.named.graphs\":true,\"query.all.graphs\":true,\"voicebox.enabled\":true,\"search.enabled\":true,\"search.semantic.enabled\":true},\"files\":[]}")
 expect "create database" "$status" 201
 load() { # load FILE CONTENT-TYPE [graph]
-  local tx; tx=$(curl -s -u "$ADMIN" -X POST "$URL/$DB/transaction/begin")
-  expect "load $1" "$(curl -s -o /dev/null -w '%{http_code}' -u "$ADMIN" -X POST -H "Content-Type: $2" \
+  local tx; tx=$(curl -s -K "$CFG" -X POST "$URL/$DB/transaction/begin")
+  expect "load $1" "$(curl -s -K "$CFG" -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: $2" \
     --data-binary "@$1" "$URL/$DB/$tx/add${3:+?graph-uri=$3}")" 200
-  expect "commit $1" "$(curl -s -o /dev/null -w '%{http_code}' -u "$ADMIN" -X POST "$URL/$DB/transaction/commit/$tx")" 200
+  expect "commit $1" "$(curl -s -K "$CFG" -o /dev/null -w '%{http_code}' -X POST "$URL/$DB/transaction/commit/$tx")" 200
 }
 load "$ROOT/samples/multi-community-vocabulary.trig" application/trig
 load "$ROOT/samples/voicebox-schema.ttl" text/turtle tag:stardog:api:context:schema
 
 # JSON bodies are built in variables first: macOS's bash 3.2 brace-expands "{a,b}" inside "$(...)".
-role() { local body="{\"rolename\":\"$1\"}" s; s=$(api POST /admin/roles "$body"); expect "role $1" "$s" 201; }
+role() { # recreate, so grants from earlier runs cannot linger
+  api DELETE "/admin/roles/$1?force=true" > /dev/null || true
+  local body="{\"rolename\":\"$1\"}" s; s=$(api POST /admin/roles "$body"); expect "role $1" "$s" 201
+}
 grant() { # grant ROLE ACTION TYPE RESOURCE...
   local r=$1 a=$2 t=$3; shift 3
   local res; res=$(printf '"%s",' "$@"); res="[${res%,}]"
@@ -67,8 +83,10 @@ grant() { # grant ROLE ACTION TYPE RESOURCE...
 
 echo "→ roles"
 role vocab_app_role                      # the app's shared (proxy) account
-grant vocab_app_role READ db '*'
-grant vocab_app_role WRITE db '*'
+set -f  # the lists may contain "*", which must reach Stardog, not match file names
+for d in $READ_DBS; do grant vocab_app_role READ db "$d"; done
+for d in $WRITE_DBS; do grant vocab_app_role WRITE db "$d"; done
+set +f
 grant vocab_app_role READ named-graph "$DB" '*'
 grant vocab_app_role WRITE named-graph "$DB" VOCAB:GOVERNANCE
 role vocab_member_role                   # anyone taking part in governance of $DB
