@@ -65,6 +65,7 @@ describe('help content', () => {
     expect(top('close match')).toContain('mappings');
     expect(top('approve')).toContain('review-queue');
     expect(top('quick start')).toContain('quick-start');
+    expect(top('stardog refused')).toContain('secured-demo');
   });
 
   it('only links to pages that exist', () => {
