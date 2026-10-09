@@ -72,6 +72,27 @@ Stardog can already store SKOS vocabularies and mappings and expose them to quer
 
 **Accepted when:** each of the four types, once approved, produces exactly the triples in the table, verified directly in Stardog.
 
+### R5. Ownership tied to Stardog accounts (optional)
+- R5.1 Users can sign in with their own Stardog username and password. The password is exchanged once for a Stardog-issued token (`GET /admin/token`) and is never stored; the token is kept in sessionStorage. Without sign-in, requests run as the proxy's shared account.
+- R5.2 The app asks Stardog which account it is acting as (the subject of a token Stardog issues for the current credentials) and shows it in the sidebar ("Signed in as …" or "Shared account: …").
+- R5.3 Every audit entry, proposal and review records that verified account next to the self-reported name.
+- R5.4 A group's owner can be a Stardog account (picked from the server's account list when the user may list accounts, otherwise typed) or a plain name.
+- R5.5 A per-database setting, **Require group owners to approve changes to their group** (off by default), works as follows:
+  - **Who must approve:** a proposal that touches a group owned by an account needs that account's approval. A mapping between two such groups needs both owners. Groups owned by a plain name add no requirement.
+  - **Recording:** each owner's approval is recorded once. The change applies in the same request in which the last required owner approves; the check runs inside Stardog's transaction. Any required owner can reject.
+  - **Review Queue:** shows each required owner as approved or waiting. Other accounts see who can review instead of the Approve button.
+- R5.6 While the setting is on:
+  - only a group's current account owner can hand that group to a new owner;
+  - only an account owner can switch the setting off (anyone can switch it on).
+- R5.7 These rules are enforced by the app, not by Stardog permissions. Anyone with write access to the database could change `VOCAB:GOVERNANCE` directly. If an owner account is lost, a Stardog administrator recovers by editing that graph, e.g. deleting `<http://vocab.gov/ontology#settings> gov:requireOwnerApproval ?v`.
+
+**Accepted when:**
+- signing in with a wrong password shows the app's error, with no browser login popup;
+- signing in correctly shows the account, and the account is stamped on audit entries;
+- with the setting on, a Physics ↔ Business mapping stays pending after one owner approves and applies after the second;
+- a proposal touching only a group without an account owner can be approved by anyone;
+- a proposal touching only another owner's group cannot be reviewed by a non-owner.
+
 ### Non-functional requirements
 - N1 All user-supplied text is escaped and all IRIs validated (`sparqlString` / `sparqlIri`). No raw interpolation into SPARQL.
 - N2 Nothing typed is lost on refresh. The selected view and shared label live in the URL, and unsent proposal input is kept as a draft.
@@ -131,7 +152,7 @@ The **Review Queue** "New proposal" form gains the add/modify fields and the map
 `samples/multi-community-vocabulary.trig` has three groups (Computer Science, Physics, Business Administration), each in its own named graph. Several labels overlap ("orders of magnitude", "model", "validation", "resolution"), each group defines them differently, and one mapping is asserted in the data so asserted and governed mappings can be compared.
 
 ## Out of scope (possible next steps)
-- Per-user identity in the audit trail (needs per-user Stardog accounts; see README security notes).
+- Enforcing owner approval with Stardog permissions (named-graph security on `VOCAB:MAPPINGS` and the vocabulary graphs) instead of in the app.
 - Semantic matching of definitions. Similar-wording suggestions are lexical (labels only). Voicebox or embeddings could also compare definitions and suggest a relation.
 - Editing language-tagged labels per language.
 - OWL classes as group members (groups are SKOS concept schemes; OWL ontologies would need a membership convention such as `rdfs:isDefinedBy`).

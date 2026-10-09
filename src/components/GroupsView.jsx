@@ -1,15 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStardog } from '../contexts/StardogContext';
-import { assignSteward } from '../lib/governance';
-import { toPrefixed } from '../lib/sparql';
+import { assignSteward, setRequireOwnerApproval } from '../lib/governance';
+import { toPrefixed, listUsers } from '../lib/sparql';
 import { useCommunityData } from '../lib/useCommunityData';
 import { useDraft } from '../lib/useDraft';
-import { Users, UserCheck, ChevronDown, ChevronRight } from 'lucide-react';
+import { Users, UserCheck, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 
 /** Communities > Groups: each SKOS concept scheme as a group with an owner and its concepts */
 export default function GroupsView() {
+  const { endpoint, db, token, connection, identity, getTermSteward } = useStardog();
   const data = useCommunityData();
-  const { schemes, concepts, mappings, loading, error } = data;
+  const { schemes, concepts, mappings, loading, error, settings } = data;
+  // Stardog accounts to pick owners from (null when this user may not list accounts)
+  const [accounts, setAccounts] = useState(null);
+  const [settingError, setSettingError] = useState(null);
+  useEffect(() => { listUsers(endpoint, token).then(setAccounts); }, [endpoint, token]);
 
   if (loading) return <div className="page-pad muted">Loading groups…</div>;
   if (error) return <div className="page-pad"><div className="connection-status error" role="alert">{error}</div></div>;
@@ -20,12 +25,42 @@ export default function GroupsView() {
     return mappings.filter(m => inScheme.has(m.source) || inScheme.has(m.target)).length;
   };
 
+  // With owner approval on, only an account owner may switch it off (otherwise anyone could bypass it)
+  const ownerAccounts = new Set(schemes.map(s => getTermSteward(s.uri)?.account).filter(Boolean));
+  const canTurnOff = !settings.requireOwnerApproval || ownerAccounts.size === 0 || ownerAccounts.has(identity?.account);
+
+  const toggleOwnerApproval = async (enabled) => {
+    setSettingError(null);
+    try {
+      await setRequireOwnerApproval(endpoint, db, token, enabled, connection.username || 'anonymous');
+      await data.reload();
+    } catch (e) {
+      setSettingError(`Not saved: ${e.message}`);
+    }
+  };
+
   return (
     <div className="page-pad" style={{ maxWidth: 1100 }}>
       <h2 className="page-title"><Users size={22} color="var(--accent)" /> Groups</h2>
       <p className="page-subtitle">
         Each group keeps its own vocabulary (a SKOS concept scheme). Owners are assigned through governance and recorded in the audit log.
       </p>
+
+      {schemes.length > 0 && (
+        <label className="card setting-row">
+          <input type="checkbox" checked={settings.requireOwnerApproval} onChange={e => toggleOwnerApproval(e.target.checked)}
+            disabled={!canTurnOff} title={canTurnOff ? undefined : 'Only a group owner (Stardog account) can turn this off'} />
+          <span>
+            <strong><ShieldCheck size={14} style={{ verticalAlign: '-2px' }} /> Require group owners to approve changes to their group</strong>
+            <span className="form-help" style={{ display: 'block', margin: '4px 0 0' }}>
+              Applies to groups whose owner is a Stardog account. A change to such a group must be approved by that account,
+              and a mapping between two of them by both owners. The rule is enforced by this app; Stardog permissions still decide who can write to the database.
+            </span>
+            {!canTurnOff && <span className="form-help" style={{ display: 'block', margin: '4px 0 0' }}>Only a group owner signed in with their Stardog account can turn this off.</span>}
+            {settingError && <span className="connection-status error" role="alert" style={{ display: 'block', marginTop: 8 }}>{settingError}</span>}
+          </span>
+        </label>
+      )}
 
       {schemes.length === 0 ? (
         <div className="empty-state">
@@ -36,7 +71,8 @@ export default function GroupsView() {
       ) : (
         <div className="group-grid">
           {schemes.map(s => (
-            <GroupCard key={s.uri} scheme={s} data={data} concepts={conceptsOf(s.uri)} mappingCount={mappingCount(s.uri)} />
+            <GroupCard key={s.uri} scheme={s} data={data} accounts={accounts} ownerApprovalOn={settings.requireOwnerApproval}
+              concepts={conceptsOf(s.uri)} mappingCount={mappingCount(s.uri)} />
           ))}
         </div>
       )}
@@ -44,22 +80,28 @@ export default function GroupsView() {
   );
 }
 
-function GroupCard({ scheme, data, concepts, mappingCount }) {
-  const { endpoint, db, token, connection, refreshGovernance } = useStardog();
-  const [ownerInput, setOwnerInput] = useDraft(`${db}:owner:${scheme.uri}`, '');
+function GroupCard({ scheme, data, accounts, ownerApprovalOn, concepts, mappingCount }) {
+  const { endpoint, db, token, connection, refreshGovernance, identity } = useStardog();
+  // Owner input: a Stardog account (can be required to approve) or just a name
+  const [draft, setDraft] = useDraft(`${db}:owner-v2:${scheme.uri}`, { kind: 'account', value: '' });
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const owner = data.ownerOf(scheme.uri);
+  const set = (patch) => setDraft(d => ({ ...d, ...patch }));
+  // With owner approval on, an account-owned group can only be handed over by its current owner
+  const canChangeOwner = !ownerApprovalOn || !owner?.account || owner.account === identity?.account;
 
   const assignOwner = async () => {
-    if (!ownerInput.trim()) return;
+    const value = draft.value.trim();
+    if (!value) return;
     setSaving(true);
     setSaveError(null);
     try {
-      await assignSteward(endpoint, db, token, scheme.uri, ownerInput.trim(), connection.username || 'anonymous');
+      await assignSteward(endpoint, db, token, scheme.uri, value, connection.username || 'anonymous',
+        draft.kind === 'account' ? { account: value } : {});
       await refreshGovernance();
-      setOwnerInput('');
+      setDraft({ kind: draft.kind, value: '' });
     } catch (e) {
       setSaveError(`Not saved: ${e.message}`);
     } finally {
@@ -83,15 +125,33 @@ function GroupCard({ scheme, data, concepts, mappingCount }) {
         {owner ? (
           <span>
             Owner: <strong>{owner.name}</strong>
+            {owner.account && <span className="owner-account-tag" title="Can be required to approve changes to this group">Stardog account</span>}
             {!owner.governed && <span className="muted"> (declared in data)</span>}
           </span>
         ) : <span className="muted">No owner assigned</span>}
       </div>
+      {!canChangeOwner ? (
+        <p className="form-help" style={{ margin: 0 }}>Only {owner.account} can hand this group to a new owner while owner approval is on.</p>
+      ) : (
       <div style={{ display: 'flex', gap: 8 }}>
-        <input className="input" placeholder={owner ? 'Change owner' : 'Assign owner (name or team)'} value={ownerInput}
-          onChange={e => setOwnerInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && assignOwner()} />
-        <button className="btn btn-secondary btn-sm" onClick={assignOwner} disabled={saving || !ownerInput.trim()}>Assign</button>
+        <select className="select" style={{ width: 'auto' }} value={draft.kind} onChange={e => set({ kind: e.target.value, value: '' })}
+          aria-label="Owner type">
+          <option value="account">Stardog account</option>
+          <option value="name">Name</option>
+        </select>
+        {draft.kind === 'account' && accounts ? (
+          <select className="select" value={draft.value} onChange={e => set({ value: e.target.value })} aria-label="Stardog account">
+            <option value="">Choose an account…</option>
+            {accounts.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        ) : (
+          <input className="input" value={draft.value} onChange={e => set({ value: e.target.value })}
+            placeholder={draft.kind === 'account' ? 'Stardog username' : 'Name or team'}
+            onKeyDown={e => e.key === 'Enter' && assignOwner()} />
+        )}
+        <button className="btn btn-secondary btn-sm" onClick={assignOwner} disabled={saving || !draft.value.trim()}>Assign</button>
       </div>
+      )}
       {saveError && <div className="connection-status error" role="alert" style={{ marginTop: 8 }}>{saveError}</div>}
 
       <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={() => setExpanded(!expanded)}>

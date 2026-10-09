@@ -11,6 +11,7 @@ A modern, browser-based vocabulary governance tool for browsing, managing, and a
 - **Governance Workflows** — Assign lifecycle statuses (Active, Draft, Under Review, Deprecated, Retired) to any term with full audit logging
 - **Communities** — Each group's SKOS concept scheme shown with its owner; **Shared Terms** puts one label's different meanings side by side and suggests similarly worded terms to map; **Mappings** lists asserted, approved, pending, rejected and retired mappings between groups (see [docs/communities-and-mappings.md](docs/communities-and-mappings.md))
 - **Governed changes** — Proposals to add, modify, deprecate, map terms or remove a mapping go through review; approving one applies the change (mappings go to the `VOCAB:MAPPINGS` graph) together with its audit entry
+- **Accounts and owner approval** — Optional sign-in with your Stardog account; group owners can be Stardog accounts, and an optional rule requires the owners of affected groups to approve changes (both owners for a mapping between two groups)
 - **Designer View** — Hierarchical class diagram with property counts and lifecycle status
 - **Impact Analysis** — Analyze upstream/downstream dependencies before making changes to your vocabulary
 - **SHACL Constraints** — View SHACL shapes and validation rules associated with classes
@@ -120,7 +121,9 @@ If a save is still in progress, the browser asks before leaving the page. If a s
 
   Put that user in `.env` as `STARDOG_USERNAME` / `STARDOG_PASSWORD`. Narrow `db:*` to specific databases where you can.
 - **The dev proxy is for local use.** Anyone who can reach port 5180 acts as the proxy's Stardog user. Vite listens on `localhost` only by default; do not start it with `--host` on a shared network. The proxy only adds credentials to same-origin requests, so other websites cannot use it (CSRF).
-- **The audit log is a record, not tamper-proof evidence.** The name in the audit trail is whatever the user typed in "Your Name", and anyone with `write` on the database can change the governance graph. For accountable attribution, give each person their own Stardog account (Bearer token) and rely on Stardog's own access controls and logs.
+- **Sign in with personal Stardog accounts for accountable attribution.** The name in "Your Name" is self-reported. When users sign in, the app records the Stardog account Stardog itself reports (via a token it issues) on every audit entry, proposal and review. With the shared proxy login, everyone appears as the proxy's account. The password is used once to obtain a token and is never stored.
+- **Owner approval is an app-enforced workflow, not a Stardog permission.** With "Require group owners to approve" on, the app only lets the owning accounts approve changes to their groups, hand groups over, or switch the rule off. Anyone with `write` on the database can still change the governance graph directly, so the audit log is a record, not tamper-proof evidence. For hard enforcement, use Stardog permissions on the graphs.
+- The dev proxy strips `WWW-Authenticate` from Stardog's 401 responses, so a wrong sign-in password shows the app's error instead of a browser login popup.
 - All values written to Stardog are escaped (`sparqlString`) and IRIs are validated (`sparqlIri`) in `src/lib/sparql.js`. Never build SPARQL by inserting raw text.
 - CSV exports neutralise spreadsheet formulas (cells starting with `=`, `+`, `-`, `@`).
 - Fonts are bundled with the app (no third-party requests), so it also works offline or air-gapped.

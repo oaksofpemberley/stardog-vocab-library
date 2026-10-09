@@ -108,6 +108,65 @@ export async function listDatabases(endpoint, token) {
   return [...databases].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
+/** Base64 for HTTP Basic credentials (handles non-ASCII usernames/passwords) */
+function base64(text) {
+  return btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+}
+
+/**
+ * Sign in as a Stardog user: exchange username/password for a Stardog-issued token.
+ * Only the token is kept; the password is used for this one request.
+ */
+export async function requestToken(endpoint, username, password) {
+  const res = await fetch(`${endpoint}/admin/token`, {
+    headers: { 'Accept': 'application/json', 'Authorization': `Basic ${base64(`${username}:${password}`)}` },
+  });
+  if (res.status === 401) throw new Error('Wrong Stardog username or password.');
+  if (!res.ok) throw new Error(`Stardog could not issue a sign-in token (${res.status}).`);
+  return (await res.json()).token;
+}
+
+/** The account inside a Stardog-issued token (JWT "sub" claim), or null */
+export function tokenAccount(jwt) {
+  try {
+    const payload = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = new TextDecoder().decode(Uint8Array.from(atob(payload), c => c.charCodeAt(0)));
+    return JSON.parse(json).sub || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Which Stardog account the current credentials belong to (token, or the proxy's shared
+ * account), as stated by Stardog itself: it issues a token for the authenticated caller.
+ * Returns null if the server cannot say (e.g. token issuing is disabled).
+ */
+export async function fetchIdentity(endpoint, token) {
+  try {
+    const res = await fetch(`${endpoint}/admin/token`, {
+      headers: { 'Accept': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) return null;
+    return tokenAccount((await res.json()).token);
+  } catch {
+    return null;
+  }
+}
+
+/** Stardog accounts, for picking a group owner (needs permission to list users; null if not allowed) */
+export async function listUsers(endpoint, token) {
+  try {
+    const res = await fetch(`${endpoint}/admin/users`, {
+      headers: { 'Accept': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) return null;
+    return ((await res.json()).users || []).sort((a, b) => a.localeCompare(b));
+  } catch {
+    return null;
+  }
+}
+
 /** Extract bindings array from SPARQL JSON result */
 export function getBindings(result) {
   return result?.results?.bindings || [];

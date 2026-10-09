@@ -27,7 +27,7 @@ const THEMES = [
 ];
 
 function AppContent() {
-  const { connected, connection, classes, loading, databases, refreshDatabases, switchDatabase, disconnect } = useStardog();
+  const { connected, connection, classes, loading, databases, refreshDatabases, switchDatabase, disconnect, identity, signOut } = useStardog();
   // The current page lives in the URL hash so a refresh returns to it
   const [activeView, setActiveView] = useState(() => readHash().get('view') || 'explore');
   const [theme, setTheme] = useState(() => loadText('local', 'vocab_theme') || 'dark');
@@ -147,6 +147,14 @@ function AppContent() {
                 {connection.db}
               </span>
             )}
+          </div>
+          {/* Who governance actions are recorded as (verified by Stardog) */}
+          <div className="identity-line" title="The Stardog account recorded on governance actions">
+            {identity
+              ? identity.signedIn
+                ? <>Signed in as <strong>{identity.account}</strong> · <button className="link-button" onClick={signOut}>Sign out</button></>
+                : <>Shared account: <strong>{identity.account}</strong></>
+              : <span className="muted">Account unknown</span>}
           </div>
           {/* Theme switcher */}
           <div style={{

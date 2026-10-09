@@ -31,6 +31,13 @@ function newId(kind) {
   return `${GOV_NS}${kind}/${Date.now()}-${rand}`;
 }
 
+/**
+ * The Stardog account the current user is verified as (see fetchIdentity), recorded on every
+ * audit entry, proposal and review next to the self-reported name. Set by StardogContext.
+ */
+let actingAccount = null;
+export function setActingAccount(account) { actingAccount = account || null; }
+
 function requireOneOf(value, allowed, what) {
   if (!allowed.includes(value)) throw new Error(`Invalid ${what}: ${value}`);
 }
@@ -43,6 +50,7 @@ function auditTriples(targetTerm, action, actor, note) {
       ${note ? `${g('editorialNote')} ${str(note)} ;` : ''}
       ${g('auditAction')} ${str(action)} ;
       ${g('auditActor')} ${str(actor)} ;
+      ${actingAccount ? `${g('auditAccount')} ${str(actingAccount)} ;` : ''}
       ${g('auditTimestamp')} ${now()} .`;
 }
 
@@ -80,34 +88,42 @@ export async function setTermStatus(endpoint, db, token, termUri, status, actor)
 /** Fetch all stewardship assignments */
 export async function fetchStewards(endpoint, db, token) {
   const query = `
-    SELECT ?term ?steward ?stewardName WHERE {
+    SELECT ?term ?steward ?stewardName ?account WHERE {
       GRAPH ${G} {
         ?term ${g('hasSteward')} ?steward .
         OPTIONAL { ?steward ${RDFS_LABEL} ?stewardName }
+        OPTIONAL { ?steward ${g('stardogAccount')} ?account }
       }
     }
   `;
   const res = await querySparql(endpoint, db, token, query);
   const map = {};
   for (const b of getBindings(res)) {
-    map[val(b, 'term')] = { uri: val(b, 'steward'), name: val(b, 'stewardName') || val(b, 'steward') };
+    map[val(b, 'term')] = { uri: val(b, 'steward'), name: val(b, 'stewardName') || val(b, 'steward'), account: val(b, 'account') || null };
   }
   return map;
 }
 
-/** Assign steward to a term */
-export async function assignSteward(endpoint, db, token, termUri, stewardName, actor) {
+/**
+ * Assign a steward (for a group: its owner) to a term.
+ * With { account }, the steward is that Stardog account, which can then be required to
+ * approve changes to the group (see the requireOwnerApproval setting).
+ */
+export async function assignSteward(endpoint, db, token, termUri, stewardName, actor, { account } = {}) {
   const t = iri(termUri);
-  const s = iri(`${GOV_NS}steward/${encodeURIComponent(stewardName)}`);
+  const s = iri(account
+    ? `${GOV_NS}account/${encodeURIComponent(account)}`
+    : `${GOV_NS}steward/${encodeURIComponent(stewardName)}`);
   const update = `
     WITH ${G}
     DELETE { ${t} ${g('hasSteward')} ?old }
     INSERT {
       ${t} ${g('hasSteward')} ${s} .
       ${s} ${RDFS_LABEL} ${str(stewardName)} .
+      ${account ? `${s} ${g('stardogAccount')} ${str(account)} .` : ''}
     }
     WHERE { OPTIONAL { ${t} ${g('hasSteward')} ?old } } ;
-    INSERT DATA { GRAPH ${G} { ${auditTriples(termUri, 'steward_assigned', actor, `Assigned to ${stewardName}`)} } }
+    INSERT DATA { GRAPH ${G} { ${auditTriples(termUri, 'steward_assigned', actor, `Assigned to ${stewardName}${account ? ' (Stardog account)' : ''}`)} } }
   `;
   await updateSparql(endpoint, db, token, update);
 }
@@ -197,6 +213,7 @@ export async function createProposal(endpoint, db, token, proposal) {
           ${g('proposalTitle')} ${str(title)} ;
           ${g('proposalDescription')} ${str(description)} ;
           ${g('proposedBy')} ${str(proposedBy)} ;
+          ${actingAccount ? `${g('proposedByAccount')} ${str(actingAccount)} ;` : ''}
           ${g('proposedDate')} ${now()} ;
           ${g('proposalStatus')} "pending" ;
           ${g('proposedChanges')} ${str(JSON.stringify(changes || {}))} .
@@ -211,7 +228,7 @@ export async function createProposal(endpoint, db, token, proposal) {
 /** Fetch all proposals */
 export async function fetchProposals(endpoint, db, token) {
   const query = `
-    SELECT ?id ?term ?type ?title ?desc ?by ?date ?status ?reviewer ?reviewComment ?applied
+    SELECT ?id ?term ?type ?title ?desc ?by ?byAccount ?date ?status ?reviewer ?reviewerAccount ?reviewComment ?applied
            ?pLabel ?pDef ?pIri ?pScheme ?mSource ?mRelation ?mTarget WHERE {
       GRAPH ${G} {
         ?id a ${g('ChangeProposal')} ;
@@ -223,6 +240,8 @@ export async function fetchProposals(endpoint, db, token) {
         OPTIONAL { ?id ${g('targetTerm')} ?term }
         OPTIONAL { ?id ${g('proposalDescription')} ?desc }
         OPTIONAL { ?id ${g('reviewedBy')} ?reviewer }
+        OPTIONAL { ?id ${g('proposedByAccount')} ?byAccount }
+        OPTIONAL { ?id ${g('reviewedByAccount')} ?reviewerAccount }
         OPTIONAL { ?id ${g('reviewComment')} ?reviewComment }
         OPTIONAL { ?id ${g('appliedDate')} ?applied }
         OPTIONAL { ?id ${g('proposedLabel')} ?pLabel }
@@ -240,12 +259,49 @@ export async function fetchProposals(endpoint, db, token) {
   return getBindings(res).map(b => ({
     id: val(b, 'id'), termUri: val(b, 'term'), type: val(b, 'type'),
     title: val(b, 'title'), description: val(b, 'desc'),
-    proposedBy: val(b, 'by'), date: val(b, 'date'), status: val(b, 'status'),
-    reviewer: val(b, 'reviewer'), reviewComment: val(b, 'reviewComment'), appliedDate: val(b, 'applied'),
+    proposedBy: val(b, 'by'), proposedByAccount: val(b, 'byAccount'), date: val(b, 'date'), status: val(b, 'status'),
+    reviewer: val(b, 'reviewer'), reviewerAccount: val(b, 'reviewerAccount'), reviewComment: val(b, 'reviewComment'), appliedDate: val(b, 'applied'),
     proposedLabel: val(b, 'pLabel'), proposedDefinition: val(b, 'pDef'),
     proposedIri: val(b, 'pIri'), proposedScheme: val(b, 'pScheme'),
     mappingSource: val(b, 'mSource'), mappingRelation: val(b, 'mRelation'), mappingTarget: val(b, 'mTarget'),
   }));
+}
+
+/* ── Owner approval (optional, per database) ── */
+
+const SETTINGS = `${GOV_NS}settings`;
+
+/** Governance settings for this database. requireOwnerApproval: changes need their groups' account owners. */
+export async function fetchSettings(endpoint, db, token) {
+  const res = await querySparql(endpoint, db, token,
+    `SELECT ?v WHERE { GRAPH ${G} { ${iri(SETTINGS)} ${g('requireOwnerApproval')} ?v } }`);
+  const v = getBindings(res)[0];
+  return { requireOwnerApproval: v ? val(v, 'v') === 'true' : false };
+}
+
+export async function setRequireOwnerApproval(endpoint, db, token, enabled, actor) {
+  const s = iri(SETTINGS);
+  const update = `
+    WITH ${G}
+    DELETE { ${s} ${g('requireOwnerApproval')} ?old }
+    INSERT { ${s} ${g('requireOwnerApproval')} ${enabled ? 'true' : 'false'} . }
+    WHERE { OPTIONAL { ${s} ${g('requireOwnerApproval')} ?old } } ;
+    INSERT DATA { GRAPH ${G} { ${auditTriples(SETTINGS, `owner_approval_${enabled ? 'required' : 'not_required'}`, actor)} } }
+  `;
+  await updateSparql(endpoint, db, token, update);
+}
+
+/** Owner approvals recorded so far: Map proposal id → [accounts] */
+export async function fetchOwnerApprovals(endpoint, db, token) {
+  const res = await querySparql(endpoint, db, token,
+    `SELECT ?p ?account WHERE { GRAPH ${G} { ?a a ${g('OwnerApproval')} ; ${g('approvalOf')} ?p ; ${g('account')} ?account } }`);
+  const map = new Map();
+  for (const b of getBindings(res)) {
+    const id = val(b, 'p');
+    if (!map.has(id)) map.set(id, []);
+    map.get(id).push(val(b, 'account'));
+  }
+  return map;
 }
 
 /** Where an approved change to a term is written: the graph holding its rdf:type (null = default graph) */
@@ -271,15 +327,37 @@ export function hasStructuredChange(p) {
  * Every operation is guarded by the proposal still being "pending" and the status is changed
  * last, so the whole request is all-or-nothing and approving twice applies nothing twice.
  * homes: { term?: {graph, isConcept}, scheme?: {graph} } from findHome().
+ *
+ * Owner approval: when requiredAccounts is non-empty, only those Stardog accounts may review.
+ * An approval is recorded per account, and the change is applied (and the proposal closed)
+ * only in the request where the last required account approves; the check runs inside
+ * Stardog's transaction, so two owners approving at the same time still apply it once.
+ * A rejection by any required owner closes the proposal.
  */
-export function buildReviewUpdate(proposal, decision, reviewer, comment, homes = {}) {
+export function buildReviewUpdate(proposal, decision, reviewer, comment, homes = {}, { account = actingAccount, requiredAccounts = [] } = {}) {
   requireOneOf(decision, DECISIONS, 'decision');
+  const gated = requiredAccounts.length > 0;
+  if (gated && !requiredAccounts.includes(account)) {
+    throw new Error(`Only the owners of the affected groups can review this: ${requiredAccounts.join(', ')}.`);
+  }
   const p = iri(proposal.id);
   const pending = `GRAPH ${G} { ${p} ${g('proposalStatus')} "pending" }`;
+  const ops = [];
+  let ready = pending;
+  if (gated && decision === 'approved') {
+    ops.push(`INSERT { GRAPH ${G} {
+        ${iri(newId('approval'))} a ${g('OwnerApproval')} ; ${g('approvalOf')} ${p} ;
+          ${g('account')} ${str(account)} ; ${g('approvalDate')} ${now()} .
+        ${auditTriples(proposal.termUri || proposal.id, 'owner_approved', reviewer, comment)}
+      } }
+      WHERE { ${pending} FILTER NOT EXISTS { GRAPH ${G} { ?mine ${g('approvalOf')} ${p} ; ${g('account')} ${str(account)} } } }`);
+    // Everything below happens only once every required owner has approved
+    ready += requiredAccounts
+      .map(a => ` FILTER EXISTS { GRAPH ${G} { ?approval ${g('approvalOf')} ${p} ; ${g('account')} ${str(a)} } }`)
+      .join('');
+  }
   const apply = decision === 'approved' && hasStructuredChange(proposal);
-  const ops = [
-    `INSERT { GRAPH ${G} { ${auditTriples(proposal.termUri || proposal.id, `proposal_${decision}`, reviewer, comment)} } } WHERE { ${pending} }`,
-  ];
+  ops.push(`INSERT { GRAPH ${G} { ${auditTriples(proposal.termUri || proposal.id, `proposal_${decision}`, reviewer, comment)} } } WHERE { ${ready} }`);
 
   if (apply) {
     const t = proposal.termUri ? iri(proposal.termUri) : null;
@@ -289,25 +367,25 @@ export function buildReviewUpdate(proposal, decision, reviewer, comment, homes =
       case 'mapping': {
         requireOneOf(proposal.mappingRelation, MAPPING_RELATION_IRIS, 'mapping relation');
         const triple = `${iri(proposal.mappingSource)} ${iri(proposal.mappingRelation)} ${iri(proposal.mappingTarget)} .`;
-        ops.push(`INSERT { GRAPH ${iri(GOVERNED_MAPPINGS_GRAPH)} { ${triple} } } WHERE { ${pending} }`);
+        ops.push(`INSERT { GRAPH ${iri(GOVERNED_MAPPINGS_GRAPH)} { ${triple} } } WHERE { ${ready} }`);
         break;
       }
       case 'unmap': {
         requireOneOf(proposal.mappingRelation, MAPPING_RELATION_IRIS, 'mapping relation');
         const triple = `${iri(proposal.mappingSource)} ${iri(proposal.mappingRelation)} ${iri(proposal.mappingTarget)} .`;
-        ops.push(`DELETE { GRAPH ${iri(GOVERNED_MAPPINGS_GRAPH)} { ${triple} } } WHERE { ${pending} }`);
+        ops.push(`DELETE { GRAPH ${iri(GOVERNED_MAPPINGS_GRAPH)} { ${triple} } } WHERE { ${ready} }`);
         break;
       }
       case 'deprecate':
         ops.push(`DELETE { GRAPH ${G} { ${t} ${g('hasStatus')} ?oldStatus } }
           INSERT { GRAPH ${G} { ${t} ${g('hasStatus')} ${g('Deprecated')} } }
-          WHERE { ${pending} OPTIONAL { GRAPH ${G} { ${t} ${g('hasStatus')} ?oldStatus } } }`);
-        ops.push(`INSERT { ${inGraph(home, `${t} ${OWL_DEPRECATED} true .`)} } WHERE { ${pending} }`);
+          WHERE { ${ready} OPTIONAL { GRAPH ${G} { ${t} ${g('hasStatus')} ?oldStatus } } }`);
+        ops.push(`INSERT { ${inGraph(home, `${t} ${OWL_DEPRECATED} true .`)} } WHERE { ${ready} }`);
         break;
       case 'modify': {
         const replace = (pred, value, v) => ops.push(`DELETE { ${inGraph(home, `${t} ${pred} ?${v} .`)} }
           INSERT { ${inGraph(home, `${t} ${pred} ${str(value)} .`)} }
-          WHERE { ${pending} OPTIONAL { ${inGraph(home, `${t} ${pred} ?${v} .`)} } }`);
+          WHERE { ${ready} OPTIONAL { ${inGraph(home, `${t} ${pred} ?${v} .`)} } }`);
         if (proposal.proposedLabel) replace(concept ? `<${SKOS}prefLabel>` : RDFS_LABEL, proposal.proposedLabel, 'oldLabel');
         if (proposal.proposedDefinition) replace(concept ? `<${SKOS}definition>` : RDFS_COMMENT, proposal.proposedDefinition, 'oldDefinition');
         break;
@@ -318,7 +396,7 @@ export function buildReviewUpdate(proposal, decision, reviewer, comment, homes =
             <${SKOS}inScheme> ${iri(proposal.proposedScheme)} ;
             ${proposal.proposedDefinition ? `<${SKOS}definition> ${str(proposal.proposedDefinition)} ;` : ''}
             <${SKOS}prefLabel> ${str(proposal.proposedLabel)} .`;
-        ops.push(`INSERT { ${inGraph(homes.scheme?.graph || null, body)} } WHERE { ${pending} }`);
+        ops.push(`INSERT { ${inGraph(homes.scheme?.graph || null, body)} } WHERE { ${ready} }`);
         break;
       }
     }
@@ -329,30 +407,34 @@ export function buildReviewUpdate(proposal, decision, reviewer, comment, homes =
       GRAPH ${G} {
         ${p} ${g('proposalStatus')} ${str(decision)} ;
              ${g('reviewedBy')} ${str(reviewer)} ;
+             ${account ? `${g('reviewedByAccount')} ${str(account)} ;` : ''}
              ${g('reviewDate')} ${now()} ;
              ${apply ? `${g('appliedDate')} ${now()} ;` : ''}
              ${g('reviewComment')} ${str(comment)} .
       }
     }
-    WHERE { GRAPH ${G} { ${p} ${g('proposalStatus')} ?old } FILTER(?old = "pending") }`);
+    WHERE { GRAPH ${G} { ${p} ${g('proposalStatus')} ?old } FILTER(?old = "pending") ${ready.slice(pending.length)} }`);
   return ops.join(' ;\n');
 }
 
-/** Review a proposal (approve/reject). Approval applies the proposed change in the same request. */
-export async function reviewProposal(endpoint, db, token, proposal, decision, reviewer, comment) {
+/**
+ * Review a proposal (approve/reject). Approval applies the proposed change in the same request
+ * (or, with owner approval, in the request of the last required owner). options: see buildReviewUpdate.
+ */
+export async function reviewProposal(endpoint, db, token, proposal, decision, reviewer, comment, options = {}) {
   const homes = {};
   if (decision === 'approved' && hasStructuredChange(proposal)) {
     if (proposal.termUri && (proposal.type === 'modify' || proposal.type === 'deprecate')) homes.term = await findHome(endpoint, db, token, proposal.termUri);
     if (proposal.type === 'add') homes.scheme = await findHome(endpoint, db, token, proposal.proposedScheme);
   }
-  await updateSparql(endpoint, db, token, buildReviewUpdate(proposal, decision, reviewer, comment, homes));
+  await updateSparql(endpoint, db, token, buildReviewUpdate(proposal, decision, reviewer, comment, homes, options));
 }
 
 /** Fetch audit log */
 export async function fetchAuditLog(endpoint, db, token, termUri) {
   const termFilter = termUri ? `?entry ${g('targetTerm')} ${iri(termUri)} .` : '';
   const query = `
-    SELECT ?entry ?term ?action ?actor ?timestamp ?note WHERE {
+    SELECT ?entry ?term ?action ?actor ?account ?timestamp ?note WHERE {
       GRAPH ${G} {
         ?entry a ${g('AuditEntry')} ;
                ${g('auditAction')} ?action ;
@@ -360,6 +442,7 @@ export async function fetchAuditLog(endpoint, db, token, termUri) {
                ${g('auditTimestamp')} ?timestamp .
         OPTIONAL { ?entry ${g('targetTerm')} ?term }
         OPTIONAL { ?entry ${g('editorialNote')} ?note }
+        OPTIONAL { ?entry ${g('auditAccount')} ?account }
         ${termFilter}
       }
     }
@@ -369,6 +452,6 @@ export async function fetchAuditLog(endpoint, db, token, termUri) {
   const res = await querySparql(endpoint, db, token, query);
   return getBindings(res).map(b => ({
     id: val(b, 'entry'), termUri: val(b, 'term'), action: val(b, 'action'),
-    actor: val(b, 'actor'), timestamp: val(b, 'timestamp'), note: val(b, 'note'),
+    actor: val(b, 'actor'), account: val(b, 'account'), timestamp: val(b, 'timestamp'), note: val(b, 'note'),
   }));
 }

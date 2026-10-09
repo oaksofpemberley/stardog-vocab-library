@@ -200,7 +200,8 @@ export default function GovernancePanel({ termUri, termLabel }) {
                   <div className={`timeline-dot ${actionType}`} />
                   <div className="timeline-time">{new Date(entry.timestamp).toLocaleString()}</div>
                   <div className="timeline-text">
-                    <span className="timeline-actor">{entry.actor}</span>{' '}
+                    <span className="timeline-actor">{entry.actor}</span>
+                    {entry.account && <span className="owner-account-tag" title="Stardog account verified by the server">{entry.account}</span>}{' '}
                     {entry.action.replace(/_/g, ' ')}
                     {entry.note && <span style={{ color: 'var(--text-muted)' }}> — {entry.note}</span>}
                   </div>

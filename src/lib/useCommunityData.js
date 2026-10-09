@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import { querySparql, getBindings, val, getLocalName } from './sparql';
 import { SCHEMES_QUERY, CONCEPTS_QUERY, MAPPINGS_QUERY } from './ontologyQueries';
-import { fetchProposals } from './governance';
+import { fetchProposals, fetchSettings, fetchOwnerApprovals } from './governance';
 import { mergeMappings, findSimilarTerms, pairKey } from './communities';
 
 /**
@@ -11,17 +11,22 @@ import { mergeMappings, findSimilarTerms, pairKey } from './communities';
  */
 export function useCommunityData() {
   const { endpoint, db, token, getTermSteward } = useStardog();
-  const [state, setState] = useState({ loading: true, error: null, schemes: [], concepts: [], triples: [], proposals: [] });
+  const [state, setState] = useState({
+    loading: true, error: null, schemes: [], concepts: [], triples: [], proposals: [],
+    settings: { requireOwnerApproval: false }, ownerApprovals: new Map(),
+  });
 
   const load = useCallback(async () => {
     // Only the first load shows a loading state; reloads keep the view (and any message) on screen
     setState(s => ({ ...s, error: null }));
     try {
-      const [schemeRes, conceptRes, mappingRes, proposals] = await Promise.all([
+      const [schemeRes, conceptRes, mappingRes, proposals, settings, ownerApprovals] = await Promise.all([
         querySparql(endpoint, db, token, SCHEMES_QUERY),
         querySparql(endpoint, db, token, CONCEPTS_QUERY),
         querySparql(endpoint, db, token, MAPPINGS_QUERY),
         fetchProposals(endpoint, db, token).catch(() => []),
+        fetchSettings(endpoint, db, token).catch(() => ({ requireOwnerApproval: false })),
+        fetchOwnerApprovals(endpoint, db, token).catch(() => new Map()),
       ]);
       setState({
         loading: false,
@@ -38,6 +43,8 @@ export function useCommunityData() {
           source: val(b, 'source'), relation: val(b, 'relation'), target: val(b, 'target'), graph: val(b, 'g'),
         })),
         proposals,
+        settings,
+        ownerApprovals,
       });
     } catch (e) {
       setState(s => ({ ...s, loading: false, error: e.message }));
@@ -54,16 +61,38 @@ export function useCommunityData() {
     // Owner: the governed steward of the scheme, else an owner declared in the data
     const ownerOf = (schemeUri) => {
       const steward = getTermSteward(schemeUri);
-      if (steward) return { name: steward.name, governed: true };
+      if (steward) return { name: steward.name, account: steward.account, governed: true };
       const declared = schemeByUri.get(schemeUri)?.declaredOwner;
       if (!declared) return null;
       return { name: /^[a-z][a-z0-9+.-]*:\/\//i.test(declared) ? getLocalName(declared) : declared, governed: false };
+    };
+    // Groups a term belongs to (a scheme is its own group)
+    const schemesOf = (uri) => {
+      if (!uri) return [];
+      if (schemeByUri.has(uri)) return [uri];
+      return [...new Set(state.concepts.filter(c => c.uri === uri && c.scheme).map(c => c.scheme))];
+    };
+    /** Groups a proposal touches */
+    const groupsOfProposal = (p) => {
+      if (p.type === 'mapping' || p.type === 'unmap') return [...new Set([...schemesOf(p.mappingSource), ...schemesOf(p.mappingTarget)])];
+      if (p.type === 'add') return p.proposedScheme ? [p.proposedScheme] : [];
+      return schemesOf(p.termUri);
+    };
+    /**
+     * Stardog accounts that must approve this proposal: with owner approval on, the account
+     * owners of every group it touches. Groups owned by a plain name (no account) add nobody.
+     */
+    const approvalsNeeded = (p) => {
+      if (!state.settings.requireOwnerApproval) return [];
+      return groupsOfProposal(p)
+        .map(scheme => ({ scheme, account: getTermSteward(scheme)?.account }))
+        .filter(x => x.account);
     };
     const mappings = mergeMappings(state.triples, state.proposals);
     // Suggestions are a to-do list: pairs that already have any mapping (even pending) are left out
     const mapped = new Set(mappings.filter(m => m.status !== 'retired' && m.status !== 'rejected').map(m => pairKey(m.source, m.target)));
     return {
-      schemeByUri, conceptByUri, schemeLabel, conceptLabel, ownerOf, mappings,
+      schemeByUri, conceptByUri, schemeLabel, conceptLabel, ownerOf, mappings, groupsOfProposal, approvalsNeeded,
       similar: findSimilarTerms(state.concepts, { exclude: mapped }),
     };
   }, [state, getTermSteward]);

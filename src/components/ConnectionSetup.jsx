@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useStardog } from '../contexts/StardogContext';
-import { Database, Key, Globe, Server, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Database, Key, Globe, Server, Loader2, CheckCircle, XCircle, UserCheck } from 'lucide-react';
 
 export default function ConnectionSetup() {
-  const { connection, updateConnection, loadOntology, loading, error, databases, refreshDatabases } = useStardog();
+  const { connection, updateConnection, loadOntology, signIn, loading, error, databases, refreshDatabases } = useStardog();
   const [testResult, setTestResult] = useState(null);
+  const [signInError, setSignInError] = useState(null);
+  // Optional personal sign-in. The password lives only in this form and is exchanged for a token.
+  const [account, setAccount] = useState('');
+  const [password, setPassword] = useState('');
 
   // Offer the server's databases as a dropdown; fall back to free text if listing fails
   useEffect(() => {
@@ -14,10 +18,17 @@ export default function ConnectionSetup() {
 
   const handleConnect = async () => {
     setTestResult(null);
+    setSignInError(null);
     try {
-      await loadOntology();
+      if (account && password) {
+        await signIn(account, password);
+        setPassword('');
+      } else {
+        await loadOntology();
+      }
       setTestResult('success');
-    } catch {
+    } catch (e) {
+      setSignInError(e.message);
       setTestResult('error');
     }
   };
@@ -72,7 +83,19 @@ export default function ConnectionSetup() {
           </div>
 
           <div className="form-group">
-            <label className="form-label"><Key size={12} style={{ marginRight: 4 }} />Bearer Token (optional with proxy credentials)</label>
+            <label className="form-label"><UserCheck size={12} style={{ marginRight: 4 }} />Sign in as a Stardog user (optional)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="input" placeholder="Stardog username" autoComplete="username" value={account} onChange={e => setAccount(e.target.value)} />
+              <input className="input" type="password" placeholder="Password" autoComplete="current-password" value={password}
+                onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleConnect()} />
+            </div>
+            <span className="form-help" style={{ margin: '4px 0 0' }}>
+              Leave empty to use the shared connection. Signing in records your Stardog account on governance actions and lets you approve changes for groups you own.
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label"><Key size={12} style={{ marginRight: 4 }} />Or paste a Bearer token (optional)</label>
             <textarea
               className="textarea"
               placeholder="eyJhbGciOiJ..."
@@ -104,13 +127,13 @@ export default function ConnectionSetup() {
           )}
           {(testResult === 'error' || error) && (
             <div className="connection-status error fade-in">
-              <XCircle size={16} /> {error || 'Connection failed'}
+              <XCircle size={16} /> {signInError || error || 'Connection failed'}
             </div>
           )}
         </div>
 
         <p style={{ marginTop: 20, fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-          Endpoint and name are remembered in this browser; a Bearer token is kept only until the tab closes.
+          Endpoint and name are remembered in this browser. Passwords are never stored; a sign-in token is kept only until the tab closes.
         </p>
       </div>
     </div>

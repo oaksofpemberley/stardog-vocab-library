@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { querySparql, listDatabases, getBindings, val, hasPendingWrites } from '../lib/sparql';
+import { querySparql, listDatabases, getBindings, val, hasPendingWrites, requestToken, fetchIdentity, tokenAccount } from '../lib/sparql';
 import { CLASSES_QUERY, PROPERTIES_QUERY, INSTANCE_COUNTS_QUERY, NAMED_GRAPHS_QUERY, SHACL_SHAPES_QUERY } from '../lib/ontologyQueries';
-import { fetchStatuses, fetchStewards } from '../lib/governance';
+import { fetchStatuses, fetchStewards, setActingAccount } from '../lib/governance';
 import { loadJson, saveJson, loadText, saveText, removeKey } from '../lib/storage';
 import { readHash, updateHash } from '../lib/urlState';
 
@@ -44,6 +44,9 @@ export function StardogProvider({ children }) {
   const [govStatuses, setGovStatuses] = useState({});
   const [govStewards, setGovStewards] = useState({});
   const [databases, setDatabases] = useState([]);
+  // The Stardog account requests run as, as reported by Stardog (null = unknown).
+  // signedIn = the user's own account (token); otherwise the proxy's shared account.
+  const [identity, setIdentity] = useState(null);
 
   // Incremented on every load / list request; late replies from an older request are dropped
   const loadGen = useRef(0);
@@ -63,9 +66,10 @@ export function StardogProvider({ children }) {
 
   const query = useCallback((q) => querySparql(endpoint, db, token, q), [endpoint, db, token]);
 
-  // targetDb lets switchDatabase load a new database before connection state re-renders
-  const loadOntology = useCallback(async (targetDb) => {
+  // targetDb / tokenOverride let a switch or a sign-in load before connection state re-renders
+  const loadOntology = useCallback(async (targetDb, tokenOverride) => {
     const db = targetDb || connection.db;
+    const token = tokenOverride ?? connection.token;
     const gen = ++loadGen.current;
     const isCurrent = () => gen === loadGen.current;
     setLoading(true);
@@ -104,6 +108,13 @@ export function StardogProvider({ children }) {
       setLoading(false);
       saveText('local', AUTO_CONNECT_KEY, '1');
       updateHash({ db });
+
+      // Who Stardog says we are: recorded on every governance write, and used for owner approval
+      fetchIdentity(endpoint, token).then(account => {
+        if (!isCurrent()) return;
+        setIdentity(account ? { account, signedIn: Boolean(token) && tokenAccount(token) === account } : null);
+        setActingAccount(account);
+      });
 
       // Phase 2: Non-blocking optional queries — failures don't block the UI
       querySparql(endpoint, db, token, INSTANCE_COUNTS_QUERY).then(countRes => {
@@ -144,7 +155,20 @@ export function StardogProvider({ children }) {
       setConnected(false);
       setLoading(false);
     }
-  }, [endpoint, connection.db, token]);
+  }, [endpoint, connection.db, connection.token]);
+
+  /** Sign in as a Stardog user: the password is exchanged for a Stardog token and not kept */
+  const signIn = useCallback(async (username, password) => {
+    const newToken = await requestToken(endpoint, username, password);
+    updateConnection({ token: newToken });
+    return loadOntology(undefined, newToken);
+  }, [endpoint, updateConnection, loadOntology]);
+
+  /** Back to the shared (proxy) account */
+  const signOut = useCallback(() => {
+    updateConnection({ token: '' });
+    return loadOntology(undefined, '');
+  }, [updateConnection, loadOntology]);
 
   const refreshDatabases = useCallback(async () => {
     const gen = ++listGen.current;
@@ -215,6 +239,7 @@ export function StardogProvider({ children }) {
       govStatuses, govStewards, getTermStatus, getTermSteward,
       loadOntology, refreshGovernance, query,
       databases, refreshDatabases, switchDatabase, disconnect,
+      identity, signIn, signOut,
       endpoint, db, token, username,
     }}>
       {children}

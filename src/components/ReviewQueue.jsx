@@ -18,7 +18,7 @@ function suggestIri(schemeUri, label) {
 }
 
 export default function ReviewQueue() {
-  const { endpoint, db, token, connection, classes, refreshGovernance, loadOntology } = useStardog();
+  const { endpoint, db, token, connection, classes, refreshGovernance, loadOntology, identity } = useStardog();
   const actor = connection.username || 'anonymous';
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,14 +84,29 @@ export default function ReviewQueue() {
     }
   };
 
+  /** Owner approval: who must approve this proposal, who has, and whether the current account may review */
+  const approvalState = (p) => {
+    const needed = community.approvalsNeeded(p);
+    const required = [...new Set(needed.map(n => n.account))];
+    const approvedBy = community.ownerApprovals.get(p.id) || [];
+    const me = identity?.account || null;
+    return {
+      needed, required, approvedBy,
+      canReview: required.length === 0 || required.includes(me),
+      alreadyApproved: Boolean(me) && approvedBy.includes(me),
+    };
+  };
+
   const handleReview = async (proposal, decision) => {
     if (!review.comment.trim() && decision === 'rejected') { setReviewError('A comment is required to reject.'); return; }
     setReviewError(null);
     try {
-      await reviewProposal(endpoint, db, token, proposal, decision, actor, review.comment || 'Approved');
+      const { required } = approvalState(proposal);
+      await reviewProposal(endpoint, db, token, proposal, decision, actor, review.comment || 'Approved',
+        { requiredAccounts: required, account: identity?.account || null });
       setReview({ id: null, comment: '' });
       await refreshGovernance();
-      await load();
+      await Promise.all([load(), community.reload()]);
       // An approved change may have edited the vocabulary itself: reload it
       if (decision === 'approved' && hasStructuredChange(proposal) && proposal.type !== 'mapping') loadOntology();
     } catch (e) {
@@ -253,6 +268,7 @@ export default function ReviewQueue() {
                       <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{p.title}</span>
                     </div>
                     <ChangeSummary p={p} />
+                    <ApprovalLine state={approvalState(p)} groupLabel={community.schemeLabel} />
                     {p.description && <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '4px 0', whiteSpace: 'pre-wrap' }}>{p.description}</p>}
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
                       <span>by {p.proposedBy}</span>
@@ -261,13 +277,20 @@ export default function ReviewQueue() {
                     </div>
                   </div>
 
-                  {review.id === p.id ? (
+                  {!approvalState(p).canReview ? (
+                    <span className="muted" style={{ fontSize: '0.75rem', maxWidth: 200, textAlign: 'right' }}>
+                      {identity?.account ? `Only ${approvalState(p).required.join(' and ')} can review this` : 'Sign in with a Stardog account to review'}
+                    </span>
+                  ) : review.id === p.id ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 16, minWidth: 200 }}>
                       <input className="input" placeholder="Review comment..." value={review.comment}
                         onChange={e => setReview(r => ({ ...r, comment: e.target.value }))} />
                       {reviewError && <div className="connection-status error" role="alert">{reviewError}</div>}
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-success btn-sm" onClick={() => handleReview(p, 'approved')}><Check size={13} /> Approve</button>
+                        <button className="btn btn-success btn-sm" onClick={() => handleReview(p, 'approved')} disabled={approvalState(p).alreadyApproved}
+                          title={approvalState(p).alreadyApproved ? 'You already approved; waiting for the other owner' : undefined}>
+                          <Check size={13} /> Approve
+                        </button>
                         <button className="btn btn-danger btn-sm" onClick={() => handleReview(p, 'rejected')}><X size={13} /> Reject</button>
                       </div>
                     </div>
@@ -312,6 +335,24 @@ export default function ReviewQueue() {
           <p>Create your first change proposal to start governing your vocabulary.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/** "Needs approval from: Physics — alice ✓ · Business — bob" */
+function ApprovalLine({ state, groupLabel }) {
+  if (state.needed.length === 0) return null;
+  return (
+    <div className="approval-line">
+      <span>Needs approval from:</span>
+      {state.needed.map(n => {
+        const done = state.approvedBy.includes(n.account);
+        return (
+          <span key={`${n.scheme}|${n.account}`} className={`approval-chip ${done ? 'done' : ''}`}>
+            {groupLabel(n.scheme)}: {n.account} {done ? '✓ approved' : '(waiting)'}
+          </span>
+        );
+      })}
     </div>
   );
 }

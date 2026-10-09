@@ -39,6 +39,11 @@ export default defineConfig(({ mode }) => {
                 proxyReq.setHeader('Authorization', basicAuth)
               }
             })
+            // A 401 with WWW-Authenticate makes the browser pop up its own login dialog (e.g. on a
+            // wrong sign-in password), which blocks the page. The app shows its own error instead.
+            proxy.on('proxyRes', (proxyRes) => {
+              delete proxyRes.headers['www-authenticate']
+            })
           },
         },
       },

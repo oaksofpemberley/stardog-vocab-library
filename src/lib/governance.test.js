@@ -85,3 +85,51 @@ describe('governance writes are injection-safe and atomic', () => {
     expect(new Set(ids).size).toBe(50);
   });
 });
+
+describe('owner approval tied to Stardog accounts', () => {
+  const SKOS = 'http://www.w3.org/2004/02/skos/core#';
+  const P = { id: 'http://vocab.gov/ontology#proposal/9', type: 'mapping', termUri: 'urn:a', mappingSource: 'urn:a', mappingRelation: `${SKOS}closeMatch`, mappingTarget: 'urn:b' };
+  const opsOf = (u) => operations(u);
+  const required = { requiredAccounts: ['alice', 'bob'] };
+
+  it('only the required owners may approve or reject', () => {
+    expect(() => gov.buildReviewUpdate(P, 'approved', 'Mallory', '', {}, { ...required, account: 'mallory' })).toThrow(/Only the owners/);
+    expect(() => gov.buildReviewUpdate(P, 'rejected', 'Mallory', '', {}, { ...required, account: null })).toThrow(/Only the owners/);
+    expect(() => gov.buildReviewUpdate(P, 'rejected', 'Bob', 'no', {}, { ...required, account: 'bob' })).not.toThrow();
+  });
+
+  it('records the approval once per account, and applies only when every required owner has approved', () => {
+    const ops = opsOf(gov.buildReviewUpdate(P, 'approved', 'Alice', 'ok', {}, { ...required, account: 'alice' }));
+    // 1st op: this owner's approval, skipped if already recorded
+    const first = JSON.stringify(ops[0]);
+    expect(first).toContain('OwnerApproval');
+    expect(first).toContain('"alice"');
+    expect(first).toContain('notexists');
+    // the mapping insert and the status change both require approvals from alice AND bob
+    const applyOp = ops.find(op => JSON.stringify(op.insert || []).includes('VOCAB:MAPPINGS'));
+    const statusOp = ops.at(-1);
+    for (const op of [applyOp, statusOp]) {
+      const where = JSON.stringify(op.where);
+      expect(where).toContain('"alice"');
+      expect(where).toContain('"bob"');
+      expect(where).toContain('"exists"');
+    }
+  });
+
+  it('without required owners, review works as before (no approval records)', () => {
+    const u = gov.buildReviewUpdate(P, 'approved', 'Anyone', 'ok', {}, { account: null });
+    expect(u).not.toContain('OwnerApproval');
+  });
+
+  it('stamps the verified Stardog account on audit entries and proposals', async () => {
+    gov.setActingAccount('alice');
+    try {
+      await gov.createProposal('E', 'db', '', ADD);
+      expect(sent[0]).toContain('proposedByAccount');
+      expect(sent[0]).toContain('auditAccount');
+      expect(literals(sent[0])).toContain('alice');
+    } finally {
+      gov.setActingAccount(null);
+    }
+  });
+});
