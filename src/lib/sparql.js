@@ -54,6 +54,19 @@ export async function updateSparql(endpoint, db, token, update) {
   }
 }
 
+/** List the databases on the server (needs admin read access) */
+export async function listDatabases(endpoint, token) {
+  const res = await fetch(`${endpoint}/admin/databases`, {
+    headers: {
+      'Accept': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) throw new Error(`List databases failed (${res.status}): ${await res.text()}`);
+  const { databases = [] } = await res.json();
+  return [...databases].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
 /** Extract bindings array from SPARQL JSON result */
 export function getBindings(result) {
   return result?.results?.bindings || [];

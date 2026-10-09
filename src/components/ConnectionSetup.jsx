@@ -1,10 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import { Database, Key, Globe, Server, Loader2, CheckCircle, XCircle } from 'lucide-react';
 
 export default function ConnectionSetup() {
-  const { connection, updateConnection, loadOntology, loading, error } = useStardog();
+  const { connection, updateConnection, loadOntology, loading, error, databases, refreshDatabases } = useStardog();
   const [testResult, setTestResult] = useState(null);
+
+  // Offer the server's databases as a dropdown; fall back to free text if listing fails
+  useEffect(() => {
+    if (!connection.endpoint) return;
+    const t = setTimeout(() => refreshDatabases().catch(() => {}), 400);
+    return () => clearTimeout(t);
+  }, [connection.endpoint, connection.token, refreshDatabases]);
 
   const handleConnect = async () => {
     setTestResult(null);
@@ -38,7 +45,7 @@ export default function ConnectionSetup() {
             <label className="form-label"><Globe size={12} style={{ marginRight: 4 }} />Stardog Endpoint</label>
             <input
               className="input"
-              placeholder="https://your-instance.stardog.cloud:5820"
+              placeholder="/stardog (dev proxy) or https://your-instance.stardog.cloud:5820"
               value={connection.endpoint}
               onChange={e => updateConnection({ endpoint: e.target.value })}
             />
@@ -46,16 +53,27 @@ export default function ConnectionSetup() {
 
           <div className="form-group">
             <label className="form-label"><Server size={12} style={{ marginRight: 4 }} />Database</label>
-            <input
-              className="input"
-              placeholder="my_knowledge_graph"
-              value={connection.db}
-              onChange={e => updateConnection({ db: e.target.value })}
-            />
+            {databases.length > 0 ? (
+              <select
+                className="select"
+                value={connection.db}
+                onChange={e => updateConnection({ db: e.target.value })}
+              >
+                {!databases.includes(connection.db) && <option value={connection.db}>{connection.db || 'Select a database…'}</option>}
+                {databases.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            ) : (
+              <input
+                className="input"
+                placeholder="my_knowledge_graph"
+                value={connection.db}
+                onChange={e => updateConnection({ db: e.target.value })}
+              />
+            )}
           </div>
 
           <div className="form-group">
-            <label className="form-label"><Key size={12} style={{ marginRight: 4 }} />Bearer Token</label>
+            <label className="form-label"><Key size={12} style={{ marginRight: 4 }} />Bearer Token (optional with proxy credentials)</label>
             <textarea
               className="textarea"
               placeholder="eyJhbGciOiJ..."

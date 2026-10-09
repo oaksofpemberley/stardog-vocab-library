@@ -19,14 +19,14 @@ A modern, browser-based vocabulary governance tool for browsing, managing, and a
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+
+- [Node.js](https://nodejs.org/) 20.19+ (required by Vite 8)
 - A running [Stardog](https://www.stardog.com/) instance with at least one database containing an OWL/RDFS ontology
 
 ### Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/stardog-vocab-library.git
+git clone https://github.com/oaksofpemberley/stardog-vocab-library.git
 cd stardog-vocab-library
 
 # Install dependencies
@@ -36,27 +36,49 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser, then enter your Stardog connection details:
+Open [http://localhost:5180](http://localhost:5180), pick a database from the dropdown, and connect. Switch databases any time from the selector at the bottom of the sidebar.
 
-| Field | Example |
-|-------|---------|
-| Endpoint | `https://your-instance.stardog.cloud:5820` |
-| Database | `my_knowledge_graph` |
-| Bearer Token | Your Stardog API token |
+### Configuration
 
-### Environment Variables (optional)
-
-Copy `.env.example` to `.env` to pre-fill connection settings:
+Copy `.env.example` to `.env` (gitignored, never commit it) and set your values:
 
 ```bash
 cp .env.example .env
 ```
 
+The app talks to Stardog through the Vite dev proxy at `/stardog`, which avoids CORS. The proxy settings are read server-side only. They have no `VITE_` prefix, so credentials never reach the browser bundle.
+
+**Local Stardog** (Docker or Stardog Desktop, the default):
+
 ```env
-VITE_STARDOG_ENDPOINT=https://your-instance.stardog.cloud:5820
-VITE_STARDOG_DB=my_knowledge_graph
-VITE_STARDOG_TOKEN=
+VITE_STARDOG_ENDPOINT=/stardog
+STARDOG_URL=http://localhost:5820
+STARDOG_USERNAME=<your user>
+STARDOG_PASSWORD=<your password>
 ```
+
+Leave the Bearer Token field empty. The proxy adds Basic auth.
+
+**Stardog Cloud:**
+
+```env
+VITE_STARDOG_ENDPOINT=/stardog
+STARDOG_URL=https://<your-endpoint>.stardog.cloud:5820
+```
+
+Paste a Bearer token into the connection form. A token entered in the app takes precedence over proxy credentials.
+
+| Variable | Where it is used | Purpose |
+|----------|------------------|---------|
+| `VITE_STARDOG_ENDPOINT` | browser | Default endpoint in the connection form (`/stardog` = dev proxy) |
+| `VITE_STARDOG_DB` | browser | Default database (optional; the form lists all databases) |
+| `VITE_STARDOG_TOKEN` | browser | Optional default Bearer token |
+| `STARDOG_URL` | dev proxy | Stardog server to forward to (default `http://localhost:5820`) |
+| `STARDOG_USERNAME` / `STARDOG_PASSWORD` | dev proxy | Optional Basic auth added by the proxy |
+
+The database list comes from `/admin/databases`, so the user needs permission to list databases. If listing fails, the form falls back to a free-text database field.
+
+Connecting is read-only. The `VOCAB:GOVERNANCE` named graph is created in a database only when the first governance action (status, steward, note or proposal) is recorded there.
 
 ## Tech Stack
 

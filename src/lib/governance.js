@@ -6,30 +6,6 @@ import { updateSparql, querySparql, getBindings, val } from './sparql';
 const GOV_GRAPH = 'VOCAB:GOVERNANCE';
 const GOV_NS = 'http://vocab.gov/ontology#';
 
-/** Bootstrap the governance graph if it doesn't exist */
-export async function bootstrapGovernanceGraph(endpoint, db, token) {
-  const checkQuery = `ASK { GRAPH <${GOV_GRAPH}> { ?s ?p ?o } }`;
-  try {
-    const res = await querySparql(endpoint, db, token, checkQuery);
-    if (res.boolean === true) return false; // already exists
-  } catch {
-    // graph doesn't exist, create it
-  }
-
-  const bootstrap = `
-    INSERT DATA {
-      GRAPH <${GOV_GRAPH}> {
-        <${GOV_NS}GovernanceGraph> a <${GOV_NS}System> ;
-          <http://www.w3.org/2000/01/rdf-schema#label> "Vocabulary Governance Graph" ;
-          <http://www.w3.org/2000/01/rdf-schema#comment> "Stores term lifecycle status, change proposals, audit entries, stewardship assignments, and editorial notes." ;
-          <${GOV_NS}createdDate> "${new Date().toISOString()}"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-      }
-    }
-  `;
-  await updateSparql(endpoint, db, token, bootstrap);
-  return true;
-}
-
 /** Fetch all governance statuses */
 export async function fetchStatuses(endpoint, db, token) {
   const query = `

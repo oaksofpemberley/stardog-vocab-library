@@ -20,7 +20,7 @@ const THEMES = [
 ];
 
 function AppContent() {
-  const { connected, connection, classes, updateConnection, loadOntology } = useStardog();
+  const { connected, connection, classes, updateConnection, loading, databases, refreshDatabases, switchDatabase } = useStardog();
   const [activeView, setActiveView] = useState('explore');
   const [theme, setTheme] = useState(() => localStorage.getItem('vocab_theme') || 'dark');
 
@@ -29,6 +29,10 @@ function AppContent() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('vocab_theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (connected) refreshDatabases().catch(() => {});
+  }, [connected, refreshDatabases]);
 
   const cycleTheme = useCallback(() => {
     const idx = THEMES.findIndex(t => t.id === theme);
@@ -111,9 +115,23 @@ function AppContent() {
         <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <Database size={14} color="var(--success)" />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', flex: 1 }} className="truncate">
-              {connection.db}
-            </span>
+            {databases.length > 0 ? (
+              <select
+                className="select"
+                title="Switch database"
+                value={connection.db}
+                disabled={loading}
+                onChange={e => switchDatabase(e.target.value)}
+                style={{ flex: 1, minWidth: 0, fontSize: '0.75rem', padding: '4px 6px' }}
+              >
+                {!databases.includes(connection.db) && <option value={connection.db}>{connection.db}</option>}
+                {databases.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            ) : (
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', flex: 1 }} className="truncate">
+                {connection.db}
+              </span>
+            )}
           </div>
           {/* Theme switcher */}
           <div style={{
@@ -153,7 +171,7 @@ function AppContent() {
       </nav>
 
       {/* Main content */}
-      <main className="app-content">
+      <main className="app-content" key={connection.db}>
         {renderView()}
       </main>
     </div>

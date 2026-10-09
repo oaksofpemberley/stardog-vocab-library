@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback } from 'react';
-import { querySparql, getBindings, val } from '../lib/sparql';
+import { querySparql, listDatabases, getBindings, val } from '../lib/sparql';
 import { CLASSES_QUERY, PROPERTIES_QUERY, INSTANCE_COUNTS_QUERY, NAMED_GRAPHS_QUERY, SHACL_SHAPES_QUERY } from '../lib/ontologyQueries';
-import { bootstrapGovernanceGraph, fetchStatuses, fetchStewards } from '../lib/governance';
+import { fetchStatuses, fetchStewards } from '../lib/governance';
 
 const StardogContext = createContext(null);
 
@@ -41,9 +41,14 @@ export function StardogProvider({ children }) {
 
   const query = useCallback((q) => querySparql(endpoint, db, token, q), [endpoint, db, token]);
 
-  const loadOntology = useCallback(async () => {
+  // targetDb lets switchDatabase load a new database before connection state re-renders
+  const loadOntology = useCallback(async (targetDb) => {
+    const db = targetDb || connection.db;
     setLoading(true);
     setError(null);
+    // Clear the previous database's data so a switch never shows stale terms
+    setClasses([]); setProperties([]); setInstanceCounts({}); setNamedGraphs([]);
+    setShaclShapes([]); setGovStatuses({}); setGovStewards({});
     try {
       // Phase 1: Essential queries (classes + properties) — must succeed
       console.log('[Vocab] Loading classes...');
@@ -101,13 +106,12 @@ export function StardogProvider({ children }) {
         })));
       }).catch(e => console.warn('[Vocab] SHACL shapes failed (non-critical):', e.message));
 
-      // Phase 3: Governance bootstrap — also non-blocking
-      bootstrapGovernanceGraph(endpoint, db, token).then(() => {
-        return Promise.all([
-          fetchStatuses(endpoint, db, token).catch(() => ({})),
-          fetchStewards(endpoint, db, token).catch(() => ({})),
-        ]);
-      }).then(([statuses, stewards]) => {
+      // Phase 3: Governance — read-only on connect, so browsing a database never writes to it.
+      // VOCAB:GOVERNANCE is created by the first governance action (status, steward, note, proposal).
+      Promise.all([
+        fetchStatuses(endpoint, db, token).catch(() => ({})),
+        fetchStewards(endpoint, db, token).catch(() => ({})),
+      ]).then(([statuses, stewards]) => {
         setGovStatuses(statuses);
         setGovStewards(stewards);
         console.log('[Vocab] Governance loaded');
@@ -119,7 +123,19 @@ export function StardogProvider({ children }) {
       setConnected(false);
       setLoading(false);
     }
-  }, [endpoint, db, token]);
+  }, [endpoint, connection.db, token]);
+
+  const [databases, setDatabases] = useState([]);
+  const refreshDatabases = useCallback(async () => {
+    const list = await listDatabases(endpoint, token);
+    setDatabases(list);
+    return list;
+  }, [endpoint, token]);
+
+  const switchDatabase = useCallback((nextDb) => {
+    updateConnection({ db: nextDb });
+    return loadOntology(nextDb);
+  }, [updateConnection, loadOntology]);
 
   const refreshGovernance = useCallback(async () => {
     try {
@@ -141,6 +157,7 @@ export function StardogProvider({ children }) {
       classes, properties, instanceCounts, namedGraphs, shaclShapes,
       govStatuses, govStewards, getTermStatus, getTermSteward,
       loadOntology, refreshGovernance, query,
+      databases, refreshDatabases, switchDatabase,
       endpoint, db, token, username,
     }}>
       {children}
