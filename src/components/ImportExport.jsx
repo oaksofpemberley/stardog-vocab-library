@@ -1,103 +1,30 @@
 import { useState } from 'react';
 import { useStardog } from '../contexts/StardogContext';
-import { toPrefixed, getNamespace, getLocalName } from '../lib/sparql';
-import { ArrowDownUp, Download, Upload, FileText, Check } from 'lucide-react';
+import { toTurtle, toJsonLd, toCsv } from '../lib/exporters';
+import { ArrowDownUp, Download, FileText, Check } from 'lucide-react';
 
 export default function ImportExport() {
   const { classes, properties, shaclShapes, instanceCounts, govStatuses } = useStardog();
   const [exportFormat, setExportFormat] = useState('turtle');
   const [exported, setExported] = useState(false);
-
-  const exportTurtle = () => {
-    const prefixes = [
-      '@prefix ex:   <http://example.org/ontology#> .',
-      '@prefix org:  <http://example.org/ontology/org#> .',
-      '@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .',
-      '@prefix owl:  <http://www.w3.org/2002/07/owl#> .',
-      '@prefix so:   <https://schema.org/> .',
-      '@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .',
-      '@prefix skos: <http://www.w3.org/2004/02/skos/core#> .',
-      '',
-    ];
-
-    const lines = [...prefixes];
-
-    // Classes
-    lines.push('# ── Classes ──');
-    for (const c of classes) {
-      const pref = toPrefixed(c.uri);
-      lines.push(`${pref} a ${c.type || 'owl:Class'} ;`);
-      if (c.label) lines.push(`    rdfs:label "${c.label}" ;`);
-      if (c.comment) lines.push(`    rdfs:comment "${c.comment}" ;`);
-      // Remove trailing ; and add .
-      lines[lines.length - 1] = lines[lines.length - 1].replace(/ ;$/, ' .');
-      lines.push('');
-    }
-
-    // Properties
-    lines.push('# ── Properties ──');
-    for (const p of properties) {
-      const pref = toPrefixed(p.uri);
-      const typeStr = p.type === 'ObjectProperty' ? 'owl:ObjectProperty' : 'owl:DatatypeProperty';
-      lines.push(`${pref} a ${typeStr} ;`);
-      if (p.label) lines.push(`    rdfs:label "${p.label}" ;`);
-      if (p.comment) lines.push(`    rdfs:comment "${p.comment}" ;`);
-      for (const d of (p.domains || [])) lines.push(`    so:domainIncludes ${toPrefixed(d)} ;`);
-      for (const r of (p.ranges || [])) lines.push(`    so:rangeIncludes ${toPrefixed(r)} ;`);
-      lines[lines.length - 1] = lines[lines.length - 1].replace(/ ;$/, ' .');
-      lines.push('');
-    }
-
-    return lines.join('\n');
-  };
-
-  const exportCSV = () => {
-    const rows = [['URI', 'Label', 'Type', 'Comment', 'Status', 'Instances'].join(',')];
-    for (const c of classes) {
-      rows.push([
-        c.uri, `"${c.label || ''}"`, c.type || 'owl:Class',
-        `"${(c.comment || '').replace(/"/g, '""')}"`,
-        govStatuses[c.uri] || 'Active',
-        instanceCounts[c.uri] || 0,
-      ].join(','));
-    }
-    for (const p of properties) {
-      rows.push([
-        p.uri, `"${p.label || ''}"`, p.type || 'Property',
-        `"${(p.comment || '').replace(/"/g, '""')}"`,
-        govStatuses[p.uri] || 'Active', '',
-      ].join(','));
-    }
-    return rows.join('\n');
-  };
-
-  const exportJsonLd = () => {
-    const context = {
-      'rdfs': 'http://www.w3.org/2000/01/rdf-schema#',
-      'owl': 'http://www.w3.org/2002/07/owl#',
-      'ex': 'http://example.org/ontology#',
-      'org': 'http://example.org/ontology/org#',
-    };
-    const graph = classes.map(c => ({
-      '@id': c.uri,
-      '@type': c.type || 'owl:Class',
-      'rdfs:label': c.label || undefined,
-      'rdfs:comment': c.comment || undefined,
-    }));
-    return JSON.stringify({ '@context': context, '@graph': graph }, null, 2);
-  };
+  const [exportError, setExportError] = useState(null);
 
   const handleExport = () => {
+    const vocab = { classes, properties, govStatuses, instanceCounts };
     let content, filename, mimeType;
-    switch (exportFormat) {
-      case 'turtle':
-        content = exportTurtle(); filename = 'vocabulary.ttl'; mimeType = 'text/turtle'; break;
-      case 'csv':
-        content = exportCSV(); filename = 'vocabulary.csv'; mimeType = 'text/csv'; break;
-      case 'jsonld':
-        content = exportJsonLd(); filename = 'vocabulary.jsonld'; mimeType = 'application/ld+json'; break;
-      default:
-        content = exportTurtle(); filename = 'vocabulary.ttl'; mimeType = 'text/turtle';
+    setExportError(null);
+    try {
+      switch (exportFormat) {
+        case 'csv':
+          content = toCsv(vocab); filename = 'vocabulary.csv'; mimeType = 'text/csv;charset=utf-8'; break;
+        case 'jsonld':
+          content = toJsonLd(vocab); filename = 'vocabulary.jsonld'; mimeType = 'application/ld+json'; break;
+        default:
+          content = toTurtle(vocab); filename = 'vocabulary.ttl'; mimeType = 'text/turtle';
+      }
+    } catch (e) {
+      setExportError(`Export failed: ${e.message}`);
+      return;
     }
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
@@ -148,6 +75,7 @@ export default function ImportExport() {
           style={{ justifyContent: 'center', padding: '12px' }}>
           {exported ? <><Check size={15} /> Exported!</> : <><Download size={15} /> Export {exportFormat.toUpperCase()}</>}
         </button>
+        {exportError && <div className="connection-status error" role="alert" style={{ marginTop: 12 }}>{exportError}</div>}
       </div>
 
       {/* Info */}

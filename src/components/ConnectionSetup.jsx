@@ -8,7 +8,6 @@ export default function ConnectionSetup() {
 
   // Offer the server's databases as a dropdown; fall back to free text if listing fails
   useEffect(() => {
-    if (!connection.endpoint) return;
     const t = setTimeout(() => refreshDatabases().catch(() => {}), 400);
     return () => clearTimeout(t);
   }, [connection.endpoint, connection.token, refreshDatabases]);
@@ -18,7 +17,7 @@ export default function ConnectionSetup() {
     try {
       await loadOntology();
       setTestResult('success');
-    } catch (e) {
+    } catch {
       setTestResult('error');
     }
   };
@@ -111,7 +110,7 @@ export default function ConnectionSetup() {
         </div>
 
         <p style={{ marginTop: 20, fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-          Credentials are stored in your browser's localStorage only.
+          Endpoint and name are remembered in this browser; a Bearer token is kept only until the tab closes.
         </p>
       </div>
     </div>

@@ -2,6 +2,7 @@
  * SPARQL queries for ontology introspection.
  * Supports both OWL and SKOS vocabularies.
  */
+import { sparqlIri } from './sparql';
 
 /** Discover all classes (OWL + SKOS) */
 export const CLASSES_QUERY = `
@@ -108,9 +109,9 @@ PREFIX so: <https://schema.org/>
 
 SELECT DISTINCT ?prop ?label ?comment ?type ?soRange ?rdfsRange WHERE {
   {
-    ?prop so:domainIncludes <${classUri}> .
+    ?prop so:domainIncludes ${sparqlIri(classUri)} .
   } UNION {
-    ?prop rdfs:domain <${classUri}> .
+    ?prop rdfs:domain ${sparqlIri(classUri)} .
   }
   { ?prop a owl:ObjectProperty . BIND("ObjectProperty" AS ?type) }
   UNION
@@ -133,23 +134,23 @@ PREFIX sh: <http://www.w3.org/ns/shacl#>
 
 SELECT ?relationship ?relatedTerm ?relatedLabel WHERE {
   {
-    ?relatedTerm so:domainIncludes <${termUri}> .
+    ?relatedTerm so:domainIncludes ${sparqlIri(termUri)} .
     BIND("property with this domain" AS ?relationship)
     OPTIONAL { ?relatedTerm rdfs:label ?relatedLabel }
   } UNION {
-    ?relatedTerm so:rangeIncludes <${termUri}> .
+    ?relatedTerm so:rangeIncludes ${sparqlIri(termUri)} .
     BIND("property with this range" AS ?relationship)
     OPTIONAL { ?relatedTerm rdfs:label ?relatedLabel }
   } UNION {
-    ?relatedTerm rdfs:domain <${termUri}> .
+    ?relatedTerm rdfs:domain ${sparqlIri(termUri)} .
     BIND("rdfs:domain reference" AS ?relationship)
     OPTIONAL { ?relatedTerm rdfs:label ?relatedLabel }
   } UNION {
-    ?relatedTerm rdfs:range <${termUri}> .
+    ?relatedTerm rdfs:range ${sparqlIri(termUri)} .
     BIND("rdfs:range reference" AS ?relationship)
     OPTIONAL { ?relatedTerm rdfs:label ?relatedLabel }
   } UNION {
-    ?relatedTerm sh:targetClass <${termUri}> .
+    ?relatedTerm sh:targetClass ${sparqlIri(termUri)} .
     BIND("SHACL shape target" AS ?relationship)
     OPTIONAL { ?relatedTerm rdfs:label ?relatedLabel }
   }
@@ -159,5 +160,5 @@ SELECT ?relationship ?relatedTerm ?relatedLabel WHERE {
 
 /** Instance count for a single class */
 export function instanceCountQuery(classUri) {
-  return `SELECT (COUNT(?s) AS ?count) WHERE { ?s a <${classUri}> }`;
+  return `SELECT (COUNT(?s) AS ?count) WHERE { ?s a ${sparqlIri(classUri)} }`;
 }

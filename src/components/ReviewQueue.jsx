@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import { fetchProposals, createProposal, reviewProposal } from '../lib/governance';
 import { toPrefixed } from '../lib/sparql';
+import { useDraft } from '../lib/useDraft';
 import { ListChecks, Plus, Check, X, Clock, FileText } from 'lucide-react';
 
 export default function ReviewQueue() {
@@ -9,16 +10,21 @@ export default function ReviewQueue() {
   const actor = connection.username || 'anonymous';
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [reviewingId, setReviewingId] = useState(null);
-  const [reviewComment, setReviewComment] = useState('');
   const [error, setError] = useState(null);
+  const [reviewError, setReviewError] = useState(null);
 
-  // New proposal form
-  const [newType, setNewType] = useState('modify');
-  const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newTermUri, setNewTermUri] = useState('');
+  // Unsent input survives a refresh (per database) until it is submitted
+  const EMPTY_PROPOSAL = { open: false, type: 'modify', title: '', desc: '', termUri: '' };
+  const [draft, setDraft] = useDraft(`${db}:proposal`, EMPTY_PROPOSAL);
+  const [review, setReview] = useDraft(`${db}:review`, { id: null, comment: '' });
+  const { open: showCreate, type: newType, title: newTitle, desc: newDesc, termUri: newTermUri } = draft;
+  const editDraft = (field) => (value) => setDraft(d => ({ ...d, [field]: value }));
+  const [setNewType, setNewTitle, setNewDesc, setNewTermUri] = ['type', 'title', 'desc', 'termUri'].map(editDraft);
+  const setShowCreate = (open) => { setError(null); setDraft(d => ({ ...d, open })); };
+  const reviewingId = review.id;
+  const reviewComment = review.comment;
+  const setReviewingId = (id) => { setReviewError(null); setReview({ id, comment: '' }); };
+  const setReviewComment = (comment) => setReview(r => ({ ...r, comment }));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,13 +39,13 @@ export default function ReviewQueue() {
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
     setError(null);
+    if (newType !== 'add' && !newTermUri) { setError('Select the term this proposal applies to.'); return; }
     try {
       await createProposal(endpoint, db, token, {
         termUri: newTermUri, type: newType,
         title: newTitle, description: newDesc, proposedBy: actor,
       });
-      setShowCreate(false);
-      setNewTitle(''); setNewDesc(''); setNewTermUri('');
+      setDraft(EMPTY_PROPOSAL);
       await load();
     } catch (e) {
       console.error('[Vocab] Proposal creation failed:', e);
@@ -48,12 +54,17 @@ export default function ReviewQueue() {
   };
 
   const handleReview = async (proposalId, decision) => {
-    if (!reviewComment.trim() && decision === 'rejected') return;
-    await reviewProposal(endpoint, db, token, proposalId, decision, actor, reviewComment || 'Approved');
-    await refreshGovernance();
-    setReviewingId(null);
-    setReviewComment('');
-    await load();
+    if (!reviewComment.trim() && decision === 'rejected') { setReviewError('A comment is required to reject.'); return; }
+    setReviewError(null);
+    try {
+      await reviewProposal(endpoint, db, token, proposalId, decision, actor, reviewComment || 'Approved');
+      setReview({ id: null, comment: '' });
+      await refreshGovernance();
+      await load();
+    } catch (e) {
+      console.error('[Vocab] Review failed:', e);
+      setReviewError(`Review not saved: ${e.message}`);
+    }
   };
 
   const pending = proposals.filter(p => p.status === 'pending');
@@ -154,6 +165,7 @@ export default function ReviewQueue() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 16, minWidth: 200 }}>
                       <input className="input" placeholder="Review comment..." value={reviewComment}
                         onChange={e => setReviewComment(e.target.value)} />
+                      {reviewError && <div className="connection-status error" role="alert">{reviewError}</div>}
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="btn btn-success btn-sm" onClick={() => handleReview(p.id, 'approved')}><Check size={13} /> Approve</button>
                         <button className="btn btn-danger btn-sm" onClick={() => handleReview(p.id, 'rejected')}><X size={13} /> Reject</button>

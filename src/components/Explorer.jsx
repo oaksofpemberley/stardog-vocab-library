@@ -1,15 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import NamespaceSidebar from './NamespaceSidebar';
 import TermDetail from './TermDetail';
 import SearchBar from './SearchBar';
-import { getNamespace, toPrefixed } from '../lib/sparql';
+import { toPrefixed } from '../lib/sparql';
+import { readHash, updateHash } from '../lib/urlState';
 
 export default function Explorer() {
   const { classes, properties } = useStardog();
-  const [selectedTerm, setSelectedTerm] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  // Selection, search and filter live in the URL hash so a refresh keeps them
+  const [selectedTerm, setSelectedTerm] = useState(() => readHash().get('term'));
+  const [searchQuery, setSearchQuery] = useState(() => readHash().get('q') || '');
+  const [statusFilter, setStatusFilter] = useState(() => readHash().get('status') || 'all');
+
+  useEffect(() => {
+    updateHash({ term: selectedTerm, q: searchQuery, status: statusFilter === 'all' ? null : statusFilter });
+  }, [selectedTerm, searchQuery, statusFilter]);
 
   // All terms = classes + properties as unified list
   const allTerms = useMemo(() => {
@@ -53,7 +59,7 @@ export default function Explorer() {
           <NamespaceSidebar
             terms={filteredTerms}
             selectedUri={selectedTerm}
-            onSelect={setSelectedTerm}
+            onSelect={(uri) => { updateHash({ tab: null }); setSelectedTerm(uri); }}
             statusFilter={statusFilter}
           />
         </div>

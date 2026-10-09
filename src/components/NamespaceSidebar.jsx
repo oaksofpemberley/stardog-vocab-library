@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useStardog } from '../contexts/StardogContext';
-import { getNamespace, toPrefixed } from '../lib/sparql';
+import { getNamespace, toPrefixed, statusKey } from '../lib/sparql';
 import { ChevronDown, ChevronRight, Hash, Link2 } from 'lucide-react';
 
 /** Derive a readable label from a namespace URI */
@@ -33,8 +33,8 @@ export default function NamespaceSidebar({ terms, selectedUri, onSelect, statusF
     if (statusFilter === 'all') return grouped;
     const map = {};
     for (const [ns, group] of Object.entries(grouped)) {
-      const classes = group.classes.filter(t => getTermStatus(t.uri).toLowerCase() === statusFilter);
-      const properties = group.properties.filter(t => getTermStatus(t.uri).toLowerCase() === statusFilter);
+      const classes = group.classes.filter(t => statusKey(getTermStatus(t.uri)) === statusFilter);
+      const properties = group.properties.filter(t => statusKey(getTermStatus(t.uri)) === statusFilter);
       if (classes.length || properties.length) map[ns] = { classes, properties };
     }
     return map;
@@ -111,7 +111,7 @@ export default function NamespaceSidebar({ terms, selectedUri, onSelect, statusF
 }
 
 function TermItem({ term, selected, onClick, count, status }) {
-  const statusClass = status?.toLowerCase() || 'active';
+  const statusClass = statusKey(status);
   const icon = term.kind === 'class' ? <Hash size={12} /> : <Link2 size={12} />;
 
   return (

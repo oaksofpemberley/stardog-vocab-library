@@ -34,7 +34,7 @@ export default function AuditLog() {
             <History size={22} color="var(--accent)" /> Audit Log
           </h2>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
-            {entries.length} entries · Immutable change history
+            {entries.length} entries · Recorded change history (names are self-reported)
           </p>
         </div>
         <select className="select" style={{ width: 'auto', minWidth: 160 }}
@@ -81,7 +81,7 @@ export default function AuditLog() {
         <div className="empty-state">
           <History size={48} />
           <h3>No Audit Entries</h3>
-          <p>Changes to terms, proposals, and stewardship will appear here as an immutable audit trail.</p>
+          <p>Changes to terms, proposals, and stewardship will appear here as an audit trail.</p>
         </div>
       )}
     </div>

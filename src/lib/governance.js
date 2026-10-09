@@ -1,17 +1,52 @@
 /**
  * Governance CRUD operations — persisted to Stardog via VOCAB:GOVERNANCE named graph.
+ *
+ * All values are written with sparqlString/sparqlIri (never raw interpolation), and each
+ * change is sent together with its audit entry in ONE update request, so Stardog commits
+ * both or neither.
  */
-import { updateSparql, querySparql, getBindings, val } from './sparql';
+import { updateSparql, querySparql, getBindings, val, sparqlString as str, sparqlIri as iri } from './sparql';
 
 const GOV_GRAPH = 'VOCAB:GOVERNANCE';
 const GOV_NS = 'http://vocab.gov/ontology#';
+const G = `<${GOV_GRAPH}>`;
+const RDFS_LABEL = '<http://www.w3.org/2000/01/rdf-schema#label>';
+
+export const STATUSES = ['Draft', 'UnderReview', 'Active', 'Deprecated', 'Retired'];
+const PROPOSAL_TYPES = ['add', 'modify', 'deprecate'];
+const DECISIONS = ['approved', 'rejected'];
+
+/** Governance-vocabulary predicate/class IRI */
+const g = (local) => `<${GOV_NS}${local}>`;
+const now = () => `${str(new Date().toISOString())}^^<http://www.w3.org/2001/XMLSchema#dateTime>`;
+
+/** Collision-free id (time-sortable prefix + 128 random bits; works outside secure contexts too) */
+function newId(kind) {
+  const rand = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${GOV_NS}${kind}/${Date.now()}-${rand}`;
+}
+
+function requireOneOf(value, allowed, what) {
+  if (!allowed.includes(value)) throw new Error(`Invalid ${what}: ${value}`);
+}
+
+/** Triples for one audit entry (no GRAPH wrapper). targetTerm and note are optional. */
+function auditTriples(targetTerm, action, actor, note) {
+  return `
+    ${iri(newId('audit'))} a ${g('AuditEntry')} ;
+      ${targetTerm ? `${g('targetTerm')} ${iri(targetTerm)} ;` : ''}
+      ${note ? `${g('editorialNote')} ${str(note)} ;` : ''}
+      ${g('auditAction')} ${str(action)} ;
+      ${g('auditActor')} ${str(actor)} ;
+      ${g('auditTimestamp')} ${now()} .`;
+}
 
 /** Fetch all governance statuses */
 export async function fetchStatuses(endpoint, db, token) {
   const query = `
     SELECT ?term ?status WHERE {
-      GRAPH <${GOV_GRAPH}> {
-        ?term <${GOV_NS}hasStatus> ?status .
+      GRAPH ${G} {
+        ?term ${g('hasStatus')} ?status .
       }
     }
   `;
@@ -25,25 +60,25 @@ export async function fetchStatuses(endpoint, db, token) {
 
 /** Set term status */
 export async function setTermStatus(endpoint, db, token, termUri, status, actor) {
+  requireOneOf(status, STATUSES, 'status');
+  const t = iri(termUri);
   const update = `
-    WITH <${GOV_GRAPH}>
-    DELETE { <${termUri}> <${GOV_NS}hasStatus> ?old }
-    INSERT {
-      <${termUri}> <${GOV_NS}hasStatus> <${GOV_NS}${status}> .
-    }
-    WHERE { OPTIONAL { <${termUri}> <${GOV_NS}hasStatus> ?old } }
+    WITH ${G}
+    DELETE { ${t} ${g('hasStatus')} ?old }
+    INSERT { ${t} ${g('hasStatus')} ${g(status)} . }
+    WHERE { OPTIONAL { ${t} ${g('hasStatus')} ?old } } ;
+    INSERT DATA { GRAPH ${G} { ${auditTriples(termUri, `status_changed_to_${status}`, actor)} } }
   `;
   await updateSparql(endpoint, db, token, update);
-  await addAuditEntry(endpoint, db, token, termUri, `status_changed_to_${status}`, actor);
 }
 
 /** Fetch all stewardship assignments */
 export async function fetchStewards(endpoint, db, token) {
   const query = `
     SELECT ?term ?steward ?stewardName WHERE {
-      GRAPH <${GOV_GRAPH}> {
-        ?term <${GOV_NS}hasSteward> ?steward .
-        OPTIONAL { ?steward <http://www.w3.org/2000/01/rdf-schema#label> ?stewardName }
+      GRAPH ${G} {
+        ?term ${g('hasSteward')} ?steward .
+        OPTIONAL { ?steward ${RDFS_LABEL} ?stewardName }
       }
     }
   `;
@@ -57,31 +92,31 @@ export async function fetchStewards(endpoint, db, token) {
 
 /** Assign steward to a term */
 export async function assignSteward(endpoint, db, token, termUri, stewardName, actor) {
-  const stewardUri = `${GOV_NS}steward/${encodeURIComponent(stewardName)}`;
+  const t = iri(termUri);
+  const s = iri(`${GOV_NS}steward/${encodeURIComponent(stewardName)}`);
   const update = `
-    WITH <${GOV_GRAPH}>
-    DELETE { <${termUri}> <${GOV_NS}hasSteward> ?old }
+    WITH ${G}
+    DELETE { ${t} ${g('hasSteward')} ?old }
     INSERT {
-      <${termUri}> <${GOV_NS}hasSteward> <${stewardUri}> .
-      <${stewardUri}> <http://www.w3.org/2000/01/rdf-schema#label> "${stewardName}" .
+      ${t} ${g('hasSteward')} ${s} .
+      ${s} ${RDFS_LABEL} ${str(stewardName)} .
     }
-    WHERE { OPTIONAL { <${termUri}> <${GOV_NS}hasSteward> ?old } }
+    WHERE { OPTIONAL { ${t} ${g('hasSteward')} ?old } } ;
+    INSERT DATA { GRAPH ${G} { ${auditTriples(termUri, 'steward_assigned', actor, `Assigned to ${stewardName}`)} } }
   `;
   await updateSparql(endpoint, db, token, update);
-  await addAuditEntry(endpoint, db, token, termUri, 'steward_assigned', actor, `Assigned to ${stewardName}`);
 }
 
 /** Add editorial note */
 export async function addEditorialNote(endpoint, db, token, termUri, note, actor) {
-  const noteId = `${GOV_NS}note/${Date.now()}`;
   const update = `
     INSERT DATA {
-      GRAPH <${GOV_GRAPH}> {
-        <${noteId}> a <${GOV_NS}EditorialNote> ;
-          <${GOV_NS}targetTerm> <${termUri}> ;
-          <${GOV_NS}noteText> "${note.replace(/"/g, '\\"')}" ;
-          <${GOV_NS}author> "${actor}" ;
-          <${GOV_NS}createdDate> "${new Date().toISOString()}"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
+      GRAPH ${G} {
+        ${iri(newId('note'))} a ${g('EditorialNote')} ;
+          ${g('targetTerm')} ${iri(termUri)} ;
+          ${g('noteText')} ${str(note)} ;
+          ${g('author')} ${str(actor)} ;
+          ${g('createdDate')} ${now()} .
       }
     }
   `;
@@ -92,12 +127,12 @@ export async function addEditorialNote(endpoint, db, token, termUri, note, actor
 export async function fetchNotes(endpoint, db, token, termUri) {
   const query = `
     SELECT ?note ?text ?author ?date WHERE {
-      GRAPH <${GOV_GRAPH}> {
-        ?note a <${GOV_NS}EditorialNote> ;
-              <${GOV_NS}targetTerm> <${termUri}> ;
-              <${GOV_NS}noteText> ?text ;
-              <${GOV_NS}author> ?author ;
-              <${GOV_NS}createdDate> ?date .
+      GRAPH ${G} {
+        ?note a ${g('EditorialNote')} ;
+              ${g('targetTerm')} ${iri(termUri)} ;
+              ${g('noteText')} ?text ;
+              ${g('author')} ?author ;
+              ${g('createdDate')} ?date .
       }
     }
     ORDER BY DESC(?date)
@@ -109,32 +144,29 @@ export async function fetchNotes(endpoint, db, token, termUri) {
   }));
 }
 
-/** Create a change proposal */
+/** Create a change proposal (and its audit entry, atomically). termUri is optional for "add" proposals. */
 export async function createProposal(endpoint, db, token, proposal) {
   const { termUri, type, title, description, proposedBy, changes } = proposal;
-  const id = `${GOV_NS}proposal/${Date.now()}`;
-  // Use the proposal id itself as target when no specific term is provided (e.g. "add" proposals)
-  const effectiveTermUri = termUri && termUri.trim() ? termUri : id;
-  const safeTitle = (title || '').replace(/"/g, "'");
-  const safeDesc = (description || '').replace(/"/g, "'");
-  const changesStr = JSON.stringify(changes || {}).replace(/"/g, "'");
+  requireOneOf(type, PROPOSAL_TYPES, 'proposal type');
+  if (type !== 'add' && !termUri) throw new Error('Select the term this proposal applies to.');
+  const id = newId('proposal');
   const update = `
     INSERT DATA {
-      GRAPH <${GOV_GRAPH}> {
-        <${id}> a <${GOV_NS}ChangeProposal> ;
-          <${GOV_NS}targetTerm> <${effectiveTermUri}> ;
-          <${GOV_NS}proposalType> "${type}" ;
-          <${GOV_NS}proposalTitle> "${safeTitle}" ;
-          <${GOV_NS}proposalDescription> "${safeDesc}" ;
-          <${GOV_NS}proposedBy> "${proposedBy}" ;
-          <${GOV_NS}proposedDate> "${new Date().toISOString()}"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
-          <${GOV_NS}proposalStatus> "pending" ;
-          <${GOV_NS}proposedChanges> "${changesStr}" .
+      GRAPH ${G} {
+        ${iri(id)} a ${g('ChangeProposal')} ;
+          ${termUri ? `${g('targetTerm')} ${iri(termUri)} ;` : ''}
+          ${g('proposalType')} ${str(type)} ;
+          ${g('proposalTitle')} ${str(title)} ;
+          ${g('proposalDescription')} ${str(description)} ;
+          ${g('proposedBy')} ${str(proposedBy)} ;
+          ${g('proposedDate')} ${now()} ;
+          ${g('proposalStatus')} "pending" ;
+          ${g('proposedChanges')} ${str(JSON.stringify(changes || {}))} .
+        ${auditTriples(termUri || id, 'proposal_created', proposedBy, title)}
       }
     }
   `;
   await updateSparql(endpoint, db, token, update);
-  await addAuditEntry(endpoint, db, token, effectiveTermUri, 'proposal_created', proposedBy, safeTitle);
   return id;
 }
 
@@ -142,15 +174,15 @@ export async function createProposal(endpoint, db, token, proposal) {
 export async function fetchProposals(endpoint, db, token) {
   const query = `
     SELECT ?id ?term ?type ?title ?desc ?by ?date ?status WHERE {
-      GRAPH <${GOV_GRAPH}> {
-        ?id a <${GOV_NS}ChangeProposal> ;
-            <${GOV_NS}proposalType> ?type ;
-            <${GOV_NS}proposalTitle> ?title ;
-            <${GOV_NS}proposedBy> ?by ;
-            <${GOV_NS}proposedDate> ?date ;
-            <${GOV_NS}proposalStatus> ?status .
-        OPTIONAL { ?id <${GOV_NS}targetTerm> ?term }
-        OPTIONAL { ?id <${GOV_NS}proposalDescription> ?desc }
+      GRAPH ${G} {
+        ?id a ${g('ChangeProposal')} ;
+            ${g('proposalType')} ?type ;
+            ${g('proposalTitle')} ?title ;
+            ${g('proposedBy')} ?by ;
+            ${g('proposedDate')} ?date ;
+            ${g('proposalStatus')} ?status .
+        OPTIONAL { ?id ${g('targetTerm')} ?term }
+        OPTIONAL { ?id ${g('proposalDescription')} ?desc }
       }
     }
     ORDER BY DESC(?date)
@@ -163,57 +195,37 @@ export async function fetchProposals(endpoint, db, token) {
   }));
 }
 
-/** Review a proposal (approve/reject) */
+/** Review a proposal (approve/reject), atomically with its audit entry */
 export async function reviewProposal(endpoint, db, token, proposalId, decision, reviewer, comment) {
+  requireOneOf(decision, DECISIONS, 'decision');
+  const p = iri(proposalId);
   const update = `
-    WITH <${GOV_GRAPH}>
-    DELETE { <${proposalId}> <${GOV_NS}proposalStatus> ?old }
+    WITH ${G}
+    DELETE { ${p} ${g('proposalStatus')} ?old }
     INSERT {
-      <${proposalId}> <${GOV_NS}proposalStatus> "${decision}" ;
-                       <${GOV_NS}reviewedBy> "${reviewer}" ;
-                       <${GOV_NS}reviewDate> "${new Date().toISOString()}"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
-                       <${GOV_NS}reviewComment> "${comment.replace(/"/g, '\\"')}" .
+      ${p} ${g('proposalStatus')} ${str(decision)} ;
+           ${g('reviewedBy')} ${str(reviewer)} ;
+           ${g('reviewDate')} ${now()} ;
+           ${g('reviewComment')} ${str(comment)} .
     }
-    WHERE { <${proposalId}> <${GOV_NS}proposalStatus> ?old }
-  `;
-  await updateSparql(endpoint, db, token, update);
-  await addAuditEntry(endpoint, db, token, proposalId, `proposal_${decision}`, reviewer, comment);
-}
-
-/** Add audit entry */
-export async function addAuditEntry(endpoint, db, token, targetTerm, action, actor, note) {
-  const id = `${GOV_NS}audit/${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const safeNote = note ? note.replace(/"/g, "'") : '';
-  const noteTriple = safeNote ? `<${id}> <${GOV_NS}editorialNote> "${safeNote}" .` : '';
-  // Ensure targetTerm is a valid URI
-  const safeTerm = targetTerm && targetTerm.trim() ? targetTerm : id;
-  const update = `
-    INSERT DATA {
-      GRAPH <${GOV_GRAPH}> {
-        <${id}> a <${GOV_NS}AuditEntry> ;
-          <${GOV_NS}targetTerm> <${safeTerm}> ;
-          <${GOV_NS}auditAction> "${action}" ;
-          <${GOV_NS}auditActor> "${actor}" ;
-          <${GOV_NS}auditTimestamp> "${new Date().toISOString()}"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
-        ${noteTriple}
-      }
-    }
+    WHERE { ${p} ${g('proposalStatus')} ?old } ;
+    INSERT DATA { GRAPH ${G} { ${auditTriples(proposalId, `proposal_${decision}`, reviewer, comment)} } }
   `;
   await updateSparql(endpoint, db, token, update);
 }
 
 /** Fetch audit log */
 export async function fetchAuditLog(endpoint, db, token, termUri) {
-  const termFilter = termUri ? `?entry <${GOV_NS}targetTerm> <${termUri}> .` : '';
+  const termFilter = termUri ? `?entry ${g('targetTerm')} ${iri(termUri)} .` : '';
   const query = `
     SELECT ?entry ?term ?action ?actor ?timestamp ?note WHERE {
-      GRAPH <${GOV_GRAPH}> {
-        ?entry a <${GOV_NS}AuditEntry> ;
-               <${GOV_NS}auditAction> ?action ;
-               <${GOV_NS}auditActor> ?actor ;
-               <${GOV_NS}auditTimestamp> ?timestamp .
-        OPTIONAL { ?entry <${GOV_NS}targetTerm> ?term }
-        OPTIONAL { ?entry <${GOV_NS}editorialNote> ?note }
+      GRAPH ${G} {
+        ?entry a ${g('AuditEntry')} ;
+               ${g('auditAction')} ?action ;
+               ${g('auditActor')} ?actor ;
+               ${g('auditTimestamp')} ?timestamp .
+        OPTIONAL { ?entry ${g('targetTerm')} ?term }
+        OPTIONAL { ?entry ${g('editorialNote')} ?note }
         ${termFilter}
       }
     }

@@ -3,8 +3,46 @@
  * Works with any Stardog endpoint.
  */
 
+/**
+ * Quote a value as a SPARQL/Turtle string literal. Every user- or data-supplied
+ * literal must go through this — raw interpolation allows SPARQL injection.
+ */
+export function sparqlString(value) {
+  const escaped = String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t');
+  return `"${escaped}"`;
+}
+
+/** Wrap an absolute IRI in <>, rejecting anything that could break out of the IRI. */
+export function sparqlIri(iri) {
+  const s = String(iri ?? '');
+  // SPARQL IRIREF forbids <>"{}|^`\ and control/space characters; require a scheme
+  // eslint-disable-next-line no-control-regex -- rejecting control characters is the point
+  if (!/^[A-Za-z][A-Za-z0-9+.-]*:[^\u0000- <>"{}|^`\\]*$/.test(s)) {
+    throw new Error(`Invalid IRI: ${s.slice(0, 80)}`);
+  }
+  return `<${s}>`;
+}
+
+/** Map a governance status (e.g. "UnderReview") to its CSS/filter key (e.g. "review"). */
+export function statusKey(status) {
+  if (!status) return 'active';
+  return status === 'UnderReview' ? 'review' : status.toLowerCase();
+}
+
+// Writes in flight, so the app can warn before a refresh/close cuts one off
+let pendingWrites = 0;
+export const hasPendingWrites = () => pendingWrites > 0;
+
 export async function querySparql(endpoint, db, token, query, timeoutMs = 30000) {
-  const url = `${endpoint}/${db}/query?default-graph-uri=tag:stardog:api:context:local`;
+  // Default graph = union of all local graphs. named-graph-uri is required too: with only
+  // default-graph-uri, the dataset has NO named graphs and every GRAPH <...> pattern
+  // (including all governance reads from VOCAB:GOVERNANCE) silently returns nothing.
+  const url = `${endpoint}/${encodeURIComponent(db)}/query?default-graph-uri=tag:stardog:api:context:local&named-graph-uri=tag:stardog:api:context:local`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -24,16 +62,17 @@ export async function querySparql(endpoint, db, token, query, timeoutMs = 30000)
     return res.json();
   } catch (e) {
     clearTimeout(timer);
-    if (e.name === 'AbortError') throw new Error('Query timed out (30s). The query may be too complex for this database.');
+    if (e.name === 'AbortError') throw new Error('Query timed out (30s). The query may be too complex for this database.', { cause: e });
     throw e;
   }
 }
 
 export async function updateSparql(endpoint, db, token, update) {
-  const url = `${endpoint}/${db}/update`;
+  const url = `${endpoint}/${encodeURIComponent(db)}/update`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
 
+  pendingWrites++;
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -49,8 +88,10 @@ export async function updateSparql(endpoint, db, token, update) {
     return true;
   } catch (e) {
     clearTimeout(timer);
-    if (e.name === 'AbortError') throw new Error('Update timed out (15s).');
+    if (e.name === 'AbortError') throw new Error('Update timed out (15s).', { cause: e });
     throw e;
+  } finally {
+    pendingWrites--;
   }
 }
 

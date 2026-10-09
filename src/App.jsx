@@ -8,6 +8,9 @@ import AnalyticsView from './components/AnalyticsView';
 import GraphView from './components/GraphView';
 import DesignerView from './components/DesignerView';
 import ImportExport from './components/ImportExport';
+import ErrorBoundary from './components/ErrorBoundary';
+import { readHash, updateHash } from './lib/urlState';
+import { loadText, saveText } from './lib/storage';
 import {
   BookOpen, Scale, BarChart3, Network, ArrowDownUp, LayoutGrid,
   Database, ListChecks, History, LogOut, Moon, Sun, Palette,
@@ -21,15 +24,20 @@ const THEMES = [
 ];
 
 function AppContent() {
-  const { connected, connection, classes, updateConnection, loading, databases, refreshDatabases, switchDatabase } = useStardog();
-  const [activeView, setActiveView] = useState('explore');
-  const [theme, setTheme] = useState(() => localStorage.getItem('vocab_theme') || 'dark');
+  const { connected, connection, classes, loading, databases, refreshDatabases, switchDatabase, disconnect } = useStardog();
+  // The current page lives in the URL hash so a refresh returns to it
+  const [activeView, setActiveView] = useState(() => readHash().get('view') || 'explore');
+  const [theme, setTheme] = useState(() => loadText('local', 'vocab_theme') || 'dark');
 
   // Apply theme to document
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('vocab_theme', theme);
+    saveText('local', 'vocab_theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (connected) updateHash({ view: activeView });
+  }, [connected, activeView]);
 
   useEffect(() => {
     if (connected) refreshDatabases().catch(() => {});
@@ -55,12 +63,6 @@ function AppContent() {
     { section: 'Tools' },
     { id: 'import', label: 'Import / Export', icon: ArrowDownUp },
   ];
-
-  const handleDisconnect = () => {
-    localStorage.removeItem('vocab_connection');
-    updateConnection({ endpoint: '', db: '', token: '', username: '' });
-    window.location.reload();
-  };
 
   const renderView = () => {
     switch (activeView) {
@@ -166,7 +168,7 @@ function AppContent() {
               );
             })}
           </div>
-          <button className="btn btn-ghost btn-sm w-full" onClick={handleDisconnect}
+          <button className="btn btn-ghost btn-sm w-full" onClick={disconnect}
             style={{ justifyContent: 'center' }}>
             <LogOut size={13} /> Disconnect
           </button>
@@ -175,7 +177,10 @@ function AppContent() {
 
       {/* Main content */}
       <main className="app-content" key={connection.db}>
-        {renderView()}
+        {/* Keyed per page and database: a crash in one view never blanks the whole app */}
+        <ErrorBoundary key={activeView}>
+          {renderView()}
+        </ErrorBoundary>
       </main>
     </div>
   );

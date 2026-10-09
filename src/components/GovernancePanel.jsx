@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStardog } from '../contexts/StardogContext';
-import { setTermStatus, assignSteward, addEditorialNote, fetchNotes, fetchAuditLog } from '../lib/governance';
-import { toPrefixed } from '../lib/sparql';
+import { setTermStatus, assignSteward, addEditorialNote, fetchNotes, fetchAuditLog, STATUSES } from '../lib/governance';
+import { useDraft } from '../lib/useDraft';
+import { statusKey } from '../lib/sparql';
 import { Shield, User, MessageSquare, Clock, Send, ChevronDown } from 'lucide-react';
 
-const STATUSES = ['Draft', 'UnderReview', 'Active', 'Deprecated', 'Retired'];
 const STATUS_DISPLAY = { Draft: 'Draft', UnderReview: 'Under Review', Active: 'Active', Deprecated: 'Deprecated', Retired: 'Retired' };
 
 export default function GovernancePanel({ termUri, termLabel }) {
@@ -15,10 +15,27 @@ export default function GovernancePanel({ termUri, termLabel }) {
 
   const [notes, setNotes] = useState([]);
   const [auditEntries, setAuditEntries] = useState([]);
-  const [newNote, setNewNote] = useState('');
-  const [newSteward, setNewSteward] = useState('');
+  // Unsent input survives a refresh (per database and term) until it is saved
+  const [newNote, setNewNote] = useDraft(`${db}:note:${termUri}`, '');
+  const [newSteward, setNewSteward] = useDraft(`${db}:steward:${termUri}`, '');
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  // Run a governance write; on failure keep the input and show why, so nothing is silently lost
+  const save = async (write, onSuccess) => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await write();
+      onSuccess?.();
+    } catch (e) {
+      console.error('[Vocab] Governance save failed:', e);
+      setSaveError(`Not saved: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const loadData = useCallback(async () => {
     const [n, a] = await Promise.all([
@@ -31,41 +48,37 @@ export default function GovernancePanel({ termUri, termLabel }) {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const handleStatusChange = async (newStatus) => {
-    setSaving(true);
-    try {
+  const handleStatusChange = (newStatus) => {
+    setShowStatusMenu(false);
+    return save(async () => {
       await setTermStatus(endpoint, db, token, termUri, newStatus, actor);
       await refreshGovernance();
       await loadData();
-    } finally {
-      setSaving(false);
-      setShowStatusMenu(false);
-    }
+    });
   };
 
-  const handleAssignSteward = async () => {
+  const handleAssignSteward = () => {
     if (!newSteward.trim()) return;
-    setSaving(true);
-    try {
+    return save(async () => {
       await assignSteward(endpoint, db, token, termUri, newSteward.trim(), actor);
       await refreshGovernance();
       await loadData();
-      setNewSteward('');
-    } finally { setSaving(false); }
+    }, () => setNewSteward(''));
   };
 
-  const handleAddNote = async () => {
+  const handleAddNote = () => {
     if (!newNote.trim()) return;
-    setSaving(true);
-    try {
+    return save(async () => {
       await addEditorialNote(endpoint, db, token, termUri, newNote.trim(), actor);
       await loadData();
-      setNewNote('');
-    } finally { setSaving(false); }
+    }, () => setNewNote(''));
   };
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {saveError && (
+        <div className="connection-status error" role="alert">{saveError}</div>
+      )}
       {/* Status Section */}
       <div className="card">
         <div className="card-header">
@@ -74,7 +87,7 @@ export default function GovernancePanel({ termUri, termLabel }) {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span className={`status-badge status-${status.toLowerCase()}`} style={{ fontSize: '0.85rem', padding: '4px 14px' }}>
+          <span className={`status-badge status-${statusKey(status)}`} style={{ fontSize: '0.85rem', padding: '4px 14px' }}>
             {STATUS_DISPLAY[status] || status}
           </span>
           <div style={{ position: 'relative' }}>
@@ -92,7 +105,7 @@ export default function GovernancePanel({ termUri, termLabel }) {
                   <button key={s} className="btn btn-ghost btn-sm w-full"
                     style={{ justifyContent: 'flex-start', borderRadius: 'var(--radius-sm)' }}
                     onClick={() => handleStatusChange(s)} disabled={saving}>
-                    <span className={`status-dot ${s.toLowerCase()}`} />
+                    <span className={`status-dot ${statusKey(s)}`} />
                     {STATUS_DISPLAY[s]}
                   </button>
                 ))}

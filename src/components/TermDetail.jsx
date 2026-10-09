@@ -2,14 +2,17 @@ import { useState, useEffect } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import GovernancePanel from './GovernancePanel';
 import ImpactAnalysis from './ImpactAnalysis';
-import { toPrefixed, getNamespace, getLocalName } from '../lib/sparql';
+import { toPrefixed, getNamespace, getLocalName, statusKey } from '../lib/sparql';
 import { propertiesForClass, instanceCountQuery } from '../lib/ontologyQueries';
 import { querySparql, getBindings, val } from '../lib/sparql';
+import { readHash, updateHash } from '../lib/urlState';
 import { Hash, Link2, ExternalLink, Shield, ChevronRight, FileText, AlertTriangle } from 'lucide-react';
 
 export default function TermDetail({ term }) {
   const { endpoint, db, token, properties: allProps, instanceCounts, shaclShapes, getTermStatus } = useStardog();
-  const [activeTab, setActiveTab] = useState('overview');
+  // The open tab is kept in the URL so a refresh returns to it
+  const [activeTab, setActiveTabState] = useState(() => readHash().get('tab') || 'overview');
+  const setActiveTab = (tab) => { setActiveTabState(tab); updateHash({ tab: tab === 'overview' ? null : tab }); };
   const [termProps, setTermProps] = useState([]);
   const [instanceCount, setInstanceCount] = useState(null);
 
@@ -64,7 +67,7 @@ export default function TermDetail({ term }) {
             </h2>
             <span className="uri" style={{ fontSize: '0.72rem' }}>{toPrefixed(term.uri)}</span>
           </div>
-          <span className={`status-badge status-${status.toLowerCase()}`}>{status}</span>
+          <span className={`status-badge status-${statusKey(status)}`}>{status}</span>
         </div>
         {term.comment && (
           <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>

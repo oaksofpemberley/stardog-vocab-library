@@ -1,6 +1,7 @@
-import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { useStardog } from '../contexts/StardogContext';
-import { toPrefixed, getNamespace, getLocalName } from '../lib/sparql';
+import { toPrefixed, getNamespace, getLocalName, statusKey } from '../lib/sparql';
+import { assignLayers } from '../lib/layout';
 import * as d3 from 'd3';
 
 /* ── Color palette — one distinct color per class ── */
@@ -37,20 +38,20 @@ function wrapLabel(text, maxChars = 12) {
 }
 
 export default function DesignerView() {
-  const { classes, properties, getTermStatus, instanceCounts, namedGraphs } = useStardog();
+  const { classes, properties, getTermStatus } = useStardog();
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [tooltip, setTooltip] = useState(null);
 
   /* ── Derive graph data ── */
-  const { nodes, links, propCounts } = useMemo(() => {
+  const { nodes, links } = useMemo(() => {
     const classUris = new Set(classes.map(c => c.uri));
 
     // Count properties per class (domain)
     const propCounts = {};
     for (const p of properties) {
-      const domains = p.domains || (p.domain ? [p.domain] : []);
+      const domains = p.domains;
       for (const d of domains) {
         if (classUris.has(d)) propCounts[d] = (propCounts[d] || 0) + 1;
       }
@@ -61,8 +62,8 @@ export default function DesignerView() {
     const linkSet = new Set();
     for (const p of properties) {
       if (p.type !== 'ObjectProperty') continue;
-      const domains = p.domains || (p.domain ? [p.domain] : []);
-      const ranges = p.ranges || (p.range ? [p.range] : []);
+      const domains = p.domains;
+      const ranges = p.ranges;
       for (const d of domains) {
         for (const r of ranges) {
           const key = `${d}→${r}`;
@@ -87,7 +88,7 @@ export default function DesignerView() {
       propCount: propCounts[c.uri] || 0,
     }));
 
-    return { nodes, links, propCounts };
+    return { nodes, links };
   }, [classes, properties, getTermStatus]);
 
   /* ── Hierarchical layout computation ── */
@@ -95,43 +96,8 @@ export default function DesignerView() {
     if (nodes.length === 0) return { positioned: [], edges: [] };
 
     const nodeMap = new Map(nodes.map(n => [n.id, { ...n }]));
-    const outEdges = new Map();
-    const inEdges = new Map();
-    for (const n of nodes) { outEdges.set(n.id, []); inEdges.set(n.id, []); }
-    for (const l of links) {
-      outEdges.get(l.source)?.push(l.target);
-      inEdges.get(l.target)?.push(l.source);
-    }
-
-    // Layer assignment via longest-path from roots
-    const layers = new Map();
-    const visited = new Set();
-
-    function assignLayer(id, depth) {
-      if (layers.has(id)) {
-        if (depth > layers.get(id)) layers.set(id, depth);
-        else return;
-      } else {
-        layers.set(id, depth);
-      }
-      visited.add(id);
-      for (const t of (outEdges.get(id) || [])) {
-        assignLayer(t, depth + 1);
-      }
-    }
-
-    // Start from nodes with no incoming edges (roots)
-    const roots = nodes.filter(n => (inEdges.get(n.id) || []).length === 0);
-    if (roots.length === 0) {
-      // No clear roots — start from first node
-      assignLayer(nodes[0].id, 0);
-    }
-    for (const r of roots) assignLayer(r.id, 0);
-
-    // Assign unvisited nodes
-    for (const n of nodes) {
-      if (!layers.has(n.id)) layers.set(n.id, 0);
-    }
+    // Longest-path layering in O(V+E); cycles (A→B→A) are tolerated, not followed forever
+    const layers = assignLayers(nodes.map(n => n.id), links);
 
     // Group by layer
     const layerGroups = {};
@@ -371,7 +337,6 @@ export default function DesignerView() {
       d3.zoomIdentity.translate(tx, ty).scale(scale)
     );
 
-    return () => {};
   }, [layout]);
 
   /* ── Detail panel for selected node ── */
@@ -383,7 +348,7 @@ export default function DesignerView() {
   const selectedProps = useMemo(() => {
     if (!selectedNode) return [];
     return properties.filter(p => {
-      const domains = p.domains || (p.domain ? [p.domain] : []);
+      const domains = p.domains;
       return domains.includes(selectedNode.id);
     });
   }, [selectedNode, properties]);
@@ -412,7 +377,7 @@ export default function DesignerView() {
           <div className="designer-tooltip-label">{tooltip.label}</div>
           <div className="designer-tooltip-uri">{tooltip.uri}</div>
           <div className="designer-tooltip-meta">
-            <span className={`status-badge status-${tooltip.status.toLowerCase()}`}>{tooltip.status}</span>
+            <span className={`status-badge status-${statusKey(tooltip.status)}`}>{tooltip.status}</span>
             <span>{tooltip.props} properties</span>
           </div>
         </div>
@@ -432,7 +397,7 @@ export default function DesignerView() {
           </div>
           <div className="designer-detail-section">
             <div className="designer-detail-section-title">Status</div>
-            <span className={`status-badge status-${selectedNode.status.toLowerCase()}`}>
+            <span className={`status-badge status-${statusKey(selectedNode.status)}`}>
               {selectedNode.status}
             </span>
           </div>

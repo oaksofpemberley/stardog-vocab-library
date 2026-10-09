@@ -80,6 +80,49 @@ The database list comes from `/admin/databases`, so the user needs permission to
 
 Connecting is read-only. The `VOCAB:GOVERNANCE` named graph is created in a database only when the first governance action (status, steward, note or proposal) is recorded there.
 
+## Data and refresh behavior
+
+Governance work (statuses, stewards, notes, proposals, reviews, audit entries) is written to Stardog, in the `VOCAB:GOVERNANCE` named graph of the database you are working in. It is never stored only in the browser. Each change is written in the same request as its audit entry, so both are saved or neither is.
+
+What the browser keeps across a refresh:
+
+| What | Where | Survives refresh | Survives clearing site data |
+|------|-------|------------------|-----------------------------|
+| Database, page, selected term, tab, search, filter | URL hash (`#db=…&view=…&term=…`) | Yes | Yes (it is in the URL) |
+| Being connected | `localStorage` flag, cleared by **Disconnect** | Yes, reconnects automatically | No |
+| Endpoint and your name | `localStorage` | Yes | No |
+| Bearer token | `sessionStorage` | Yes | No (also cleared when the tab closes) |
+| Unsent text (notes, steward, proposal form, review comment) | `localStorage` drafts, per database and term | Yes | No |
+
+If a save is still in progress, the browser asks before leaving the page. If a save fails, the app shows the error and keeps what you typed.
+
+## Security notes
+
+- **Use a least-privilege Stardog account for the proxy, not `admin`.** The app needs `read` on the databases it browses and `write` on the ones where you record governance. It never needs to create or drop databases or manage users. For example:
+
+  ```bash
+  stardog-admin role add vocab_app_role
+  stardog-admin role grant -a read  -o "db:*" vocab_app_role
+  stardog-admin role grant -a write -o "db:*" vocab_app_role
+  # create a user (see: stardog-admin help user add), then:
+  stardog-admin user addrole -R vocab_app_role vocab_app
+  ```
+
+  Put that user in `.env` as `STARDOG_USERNAME` / `STARDOG_PASSWORD`. Narrow `db:*` to specific databases where you can.
+- **The dev proxy is for local use.** Anyone who can reach port 5180 acts as the proxy's Stardog user. Vite listens on `localhost` only by default; do not start it with `--host` on a shared network. The proxy only adds credentials to same-origin requests, so other websites cannot use it (CSRF).
+- **The audit log is a record, not tamper-proof evidence.** The name in the audit trail is whatever the user typed in "Your Name", and anyone with `write` on the database can change the governance graph. For accountable attribution, give each person their own Stardog account (Bearer token) and rely on Stardog's own access controls and logs.
+- All values written to Stardog are escaped (`sparqlString`) and IRIs are validated (`sparqlIri`) in `src/lib/sparql.js`. Never build SPARQL by inserting raw text.
+- CSV exports neutralise spreadsheet formulas (cells starting with `=`, `+`, `-`, `@`).
+- Fonts are bundled with the app (no third-party requests), so it also works offline or air-gapped.
+
+## Development
+
+```bash
+npm test        # unit tests (vitest): SPARQL escaping/injection, exports, diagram layout
+npm run lint
+npm run build
+```
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -98,6 +141,8 @@ src/
 │   ├── AnalyticsView.jsx      # Vocabulary health dashboard
 │   ├── AuditLog.jsx           # Change history viewer
 │   ├── ConnectionSetup.jsx    # Stardog connection form
+│   ├── DesignerView.jsx       # Hierarchical class diagram
+│   ├── ErrorBoundary.jsx      # Keeps a crash in one view from blanking the app
 │   ├── Explorer.jsx           # Main ontology browser
 │   ├── GovernancePanel.jsx    # Lifecycle status management
 │   ├── GraphView.jsx          # D3 force-directed graph
@@ -110,7 +155,15 @@ src/
 ├── contexts/
 │   └── StardogContext.jsx     # Stardog connection & data state
 ├── lib/
-│   └── sparql.js              # Generic SPARQL client
+│   ├── sparql.js              # SPARQL client, escaping (sparqlString/sparqlIri)
+│   ├── governance.js          # Governance reads/writes (VOCAB:GOVERNANCE graph)
+│   ├── ontologyQueries.js     # Ontology introspection queries
+│   ├── exporters.js           # Turtle / JSON-LD / CSV export
+│   ├── layout.js              # Cycle-safe diagram layering
+│   ├── storage.js             # Safe browser storage
+│   ├── urlState.js            # Page state in the URL hash
+│   ├── useDraft.js            # Unsent input that survives refresh
+│   └── *.test.js              # Unit tests (npm test)
 └── main.jsx                   # App entry point
 ```
 
