@@ -12,6 +12,7 @@ export default function ReviewQueue() {
   const [showCreate, setShowCreate] = useState(false);
   const [reviewingId, setReviewingId] = useState(null);
   const [reviewComment, setReviewComment] = useState('');
+  const [error, setError] = useState(null);
 
   // New proposal form
   const [newType, setNewType] = useState('modify');
@@ -31,13 +32,19 @@ export default function ReviewQueue() {
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
-    await createProposal(endpoint, db, token, {
-      termUri: newTermUri, type: newType,
-      title: newTitle, description: newDesc, proposedBy: actor,
-    });
-    setShowCreate(false);
-    setNewTitle(''); setNewDesc(''); setNewTermUri('');
-    await load();
+    setError(null);
+    try {
+      await createProposal(endpoint, db, token, {
+        termUri: newTermUri, type: newType,
+        title: newTitle, description: newDesc, proposedBy: actor,
+      });
+      setShowCreate(false);
+      setNewTitle(''); setNewDesc(''); setNewTermUri('');
+      await load();
+    } catch (e) {
+      console.error('[Vocab] Proposal creation failed:', e);
+      setError(`Failed to save proposal: ${e.message}`);
+    }
   };
 
   const handleReview = async (proposalId, decision) => {
@@ -105,6 +112,11 @@ export default function ReviewQueue() {
                   placeholder="Detailed justification for this change..." />
               </div>
             </div>
+            {error && (
+              <div className="connection-status error" style={{ marginTop: 12 }}>
+                ⚠️ {error}
+              </div>
+            )}
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleCreate}>Submit Proposal</button>

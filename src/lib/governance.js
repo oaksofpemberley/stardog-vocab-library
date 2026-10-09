@@ -113,15 +113,19 @@ export async function fetchNotes(endpoint, db, token, termUri) {
 export async function createProposal(endpoint, db, token, proposal) {
   const { termUri, type, title, description, proposedBy, changes } = proposal;
   const id = `${GOV_NS}proposal/${Date.now()}`;
-  const changesStr = JSON.stringify(changes || {}).replace(/"/g, '\\"');
+  // Use the proposal id itself as target when no specific term is provided (e.g. "add" proposals)
+  const effectiveTermUri = termUri && termUri.trim() ? termUri : id;
+  const safeTitle = (title || '').replace(/"/g, "'");
+  const safeDesc = (description || '').replace(/"/g, "'");
+  const changesStr = JSON.stringify(changes || {}).replace(/"/g, "'");
   const update = `
     INSERT DATA {
       GRAPH <${GOV_GRAPH}> {
         <${id}> a <${GOV_NS}ChangeProposal> ;
-          <${GOV_NS}targetTerm> <${termUri || ''}> ;
+          <${GOV_NS}targetTerm> <${effectiveTermUri}> ;
           <${GOV_NS}proposalType> "${type}" ;
-          <${GOV_NS}proposalTitle> "${title.replace(/"/g, '\\"')}" ;
-          <${GOV_NS}proposalDescription> "${description.replace(/"/g, '\\"')}" ;
+          <${GOV_NS}proposalTitle> "${safeTitle}" ;
+          <${GOV_NS}proposalDescription> "${safeDesc}" ;
           <${GOV_NS}proposedBy> "${proposedBy}" ;
           <${GOV_NS}proposedDate> "${new Date().toISOString()}"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;
           <${GOV_NS}proposalStatus> "pending" ;
@@ -130,7 +134,7 @@ export async function createProposal(endpoint, db, token, proposal) {
     }
   `;
   await updateSparql(endpoint, db, token, update);
-  await addAuditEntry(endpoint, db, token, termUri || id, 'proposal_created', proposedBy, title);
+  await addAuditEntry(endpoint, db, token, effectiveTermUri, 'proposal_created', proposedBy, safeTitle);
   return id;
 }
 
@@ -179,12 +183,15 @@ export async function reviewProposal(endpoint, db, token, proposalId, decision, 
 /** Add audit entry */
 export async function addAuditEntry(endpoint, db, token, targetTerm, action, actor, note) {
   const id = `${GOV_NS}audit/${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const noteTriple = note ? `<${id}> <${GOV_NS}editorialNote> "${note.replace(/"/g, '\\"')}" .` : '';
+  const safeNote = note ? note.replace(/"/g, "'") : '';
+  const noteTriple = safeNote ? `<${id}> <${GOV_NS}editorialNote> "${safeNote}" .` : '';
+  // Ensure targetTerm is a valid URI
+  const safeTerm = targetTerm && targetTerm.trim() ? targetTerm : id;
   const update = `
     INSERT DATA {
       GRAPH <${GOV_GRAPH}> {
         <${id}> a <${GOV_NS}AuditEntry> ;
-          <${GOV_NS}targetTerm> <${targetTerm}> ;
+          <${GOV_NS}targetTerm> <${safeTerm}> ;
           <${GOV_NS}auditAction> "${action}" ;
           <${GOV_NS}auditActor> "${actor}" ;
           <${GOV_NS}auditTimestamp> "${new Date().toISOString()}"^^<http://www.w3.org/2001/XMLSchema#dateTime> .

@@ -6,9 +6,10 @@ import ReviewQueue from './components/ReviewQueue';
 import AuditLog from './components/AuditLog';
 import AnalyticsView from './components/AnalyticsView';
 import GraphView from './components/GraphView';
+import DesignerView from './components/DesignerView';
 import ImportExport from './components/ImportExport';
 import {
-  BookOpen, Scale, BarChart3, Network, ArrowDownUp,
+  BookOpen, Scale, BarChart3, Network, ArrowDownUp, LayoutGrid,
   Database, ListChecks, History, LogOut, Moon, Sun, Palette,
 } from 'lucide-react';
 import './index.css';
@@ -45,6 +46,7 @@ function AppContent() {
     { section: 'Explore' },
     { id: 'explore', label: 'Vocabulary Explorer', icon: BookOpen },
     { id: 'graph', label: 'Graph View', icon: Network },
+    { id: 'designer', label: 'Designer View', icon: LayoutGrid },
     { section: 'Govern' },
     { id: 'queue', label: 'Review Queue', icon: ListChecks },
     { id: 'audit', label: 'Audit Log', icon: History },
@@ -64,6 +66,7 @@ function AppContent() {
     switch (activeView) {
       case 'explore': return <Explorer />;
       case 'graph': return <GraphView />;
+      case 'designer': return <DesignerView />;
       case 'queue': return <ReviewQueue />;
       case 'audit': return <AuditLog />;
       case 'analytics': return <AnalyticsView />;
