@@ -201,6 +201,7 @@ export const HELP_ARTICLES = [
       ] },
       { type: 'cannot', items: [
         'List terms typed only as `rdfs:Class` or `rdf:Property`, or annotation properties.',
+        'List terms from standard vocabularies (RDF, RDFS, OWL, XSD, SKOS, Dublin Core, schema.org) or the app\'s own governance terms. They are hidden on purpose, even when loaded (for example in the Voicebox schema graph). A vocabulary you defined inside one of those namespaces, such as your own schema.org extension terms, is hidden too.',
         'Edit a term directly. Changes go through a proposal in the Review Queue.',
         'Show the class hierarchy (subclasses) or reasoning results. The app reads asserted data only.',
         'Show instance counts for every class on very large databases: counts are loaded for the 100 most-used types.',
@@ -420,8 +421,8 @@ export const HELP_ARTICLES = [
     id: 'impact',
     section: 'Govern',
     title: 'Impact analysis',
-    summary: 'Before changing a term, see the properties, SHACL shapes and data that point at it.',
-    keywords: ['impact', 'dependencies', 'dependency', 'downstream', 'what breaks', 'risk', 'safe to modify', 'instances'],
+    summary: 'Before changing a term, see the properties, SHACL shapes, mapped terms and data that point at it.',
+    keywords: ['impact', 'dependencies', 'dependency', 'downstream', 'what breaks', 'risk', 'safe to modify', 'instances', 'mapped'],
     related: ['governance', 'review-queue'],
     body: [
       { type: 'p', text: 'The **Impact** tab on a term counts direct dependencies and rates them: **Safe to Modify** (none), **Moderate Impact** (1 to 3) or **High Impact** (more than 3).' },
@@ -616,7 +617,7 @@ export const HELP_ARTICLES = [
       { type: 'h', text: 'A group owner\'s account is gone and nobody can approve' },
       { type: 'p', text: 'Ask a Stardog administrator to turn owner approval off directly: delete the triple `<http://vocab.gov/ontology#settings> gov:requireOwnerApproval ?v` from the `VOCAB:GOVERNANCE` graph. Then reassign the group\'s owner.' },
       { type: 'h', text: 'The Explorer shows no terms' },
-      { type: 'p', text: 'The database has no `owl:Class`, `skos:Concept`, `skos:ConceptScheme`, `owl:ObjectProperty` or `owl:DatatypeProperty` (terms typed only as `rdfs:Class` are not listed). Check you picked the right database.' },
+      { type: 'p', text: 'The database has no `owl:Class`, `skos:Concept`, `skos:ConceptScheme`, `owl:ObjectProperty` or `owl:DatatypeProperty` (terms typed only as `rdfs:Class` are not listed), or all its terms are in a standard namespace that the Explorer hides (RDF, RDFS, OWL, XSD, SKOS, Dublin Core, schema.org). Check you picked the right database.' },
       { type: 'h', text: 'Groups and Shared Terms are empty' },
       { type: 'p', text: 'These pages need SKOS concept schemes with concepts linked by `skos:inScheme`. Load `samples/multi-community-vocabulary.trig` to try them.' },
       { type: 'h', text: 'Graph View is just dots, or empty' },
