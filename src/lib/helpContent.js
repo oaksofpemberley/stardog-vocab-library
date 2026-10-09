@@ -34,7 +34,7 @@ export const HELP_ARTICLES = [
         'On the connection screen, leave **Stardog Endpoint** as `/stardog` unless you were given another address.',
         'Pick **vocab_communities_demo** in the **Database** list.',
         'Type your name or email in **Your Name**. It is written next to everything you do in the audit trail.',
-        'Optionally, **sign in as a Stardog user** with your own Stardog username and password. Then the audit trail records your verified account, not just the name you typed. Skip it and you work as the app\'s shared account.',
+        'Optionally, **sign in as a Stardog user** with your own Stardog username and password. Then the audit trail also records the Stardog account you signed in as, not just the name you typed. Skip it and you work as the app\'s shared account.',
         'Leave **Bearer Token** empty unless you use Stardog Cloud (then paste your token).',
         'Click **Connect & Load Ontology**. Connecting only reads; nothing is written to the database yet.',
       ] },
@@ -156,7 +156,7 @@ export const HELP_ARTICLES = [
       { type: 'cannot', items: [
         'Create, delete or configure databases. Use Stardog Studio or the Stardog CLI.',
         'Load data files into Stardog. See "What it can and can\'t do".',
-        'Verify "Your Name". It is whatever you type; only the Stardog account (when you sign in) is verified.',
+        'Verify "Your Name". It is whatever you type. Stardog confirms your account when you sign in, but the account shown on each entry is recorded by the app, so it is a record, not proof.',
       ] },
     ],
   },
@@ -438,11 +438,11 @@ export const HELP_ARTICLES = [
     keywords: ['history', 'audit trail', 'who changed', 'log', 'activity', 'compliance', 'provenance'],
     related: ['governance', 'review-queue', 'security'],
     body: [
-      { type: 'p', text: 'Each entry shows the name the person typed and, as a tag, the **Stardog account** that made the change, as verified by Stardog. Without a personal sign-in, that tag is the app\'s shared account.' },
+      { type: 'p', text: 'Each entry shows the name the person typed and, as a tag, the **Stardog account the app was signed in as**. Stardog confirms that account at sign-in, but the app writes the tag, so it is not tamper-proof. Without a personal sign-in, the tag is the app\'s shared account.' },
       { type: 'p', text: 'The Audit Log lists every status change, steward or owner assignment, note, proposal and review in this database. Use the drop-down to show one kind of action. Each term\'s Governance tab shows its own recent entries.' },
       { type: 'story', title: 'Story: answering an auditor', text: 'An auditor asks when "Customer" was deprecated and on whose authority. The Audit Log shows the Deprecate proposal by Sam on 3 March, approved by Priya on 5 March with the comment "Replaced by Party". Screenshot, done.' },
       { type: 'cannot', items: [
-        'Prove identity on its own. Each entry records the typed name and the Stardog account that made the change. That account is verified, but it is the shared proxy account unless the person signed in.',
+        'Prove who did what. The typed name and the account tag are both written by the app, so anyone with direct write access to the database could forge them. Stardog\'s own audit logging is the authority on who wrote what.',
         'Prevent tampering. Anyone with write access to the database could change the governance graph directly.',
         'Record changes made outside this app (for example, a SPARQL update run in Studio).',
         'Export the log. Query `VOCAB:GOVERNANCE` in Stardog if you need it elsewhere.',
@@ -515,7 +515,7 @@ export const HELP_ARTICLES = [
       { type: 'h', text: 'It can' },
       { type: 'can', items: [
         'Browse and search OWL and SKOS vocabularies in any Stardog database you can read.',
-        'Record lifecycle status, stewards, group owners and notes, all audited with the Stardog account that made the change.',
+        'Record lifecycle status, stewards, group owners and notes, with an audit entry naming the person and the Stardog account the app was signed in as.',
         'Require group owners (Stardog accounts) to approve changes to their group, when a database turns that on.',
         'Run changes through proposal and review, and apply them to Stardog on approval: add SKOS concepts, change labels and definitions, deprecate terms.',
         'Show where groups use the same or similar words differently, and record governed SKOS mappings between them, with full history.',
@@ -580,7 +580,7 @@ export const HELP_ARTICLES = [
         'Everything typed is escaped before it is sent to Stardog, and CSV exports neutralise spreadsheet formulas.',
         'Fonts and code are bundled, so the app works offline and in air-gapped networks.',
       ] },
-      { type: 'story', title: 'Story: why "Your Name" isn\'t a login', text: 'Two people share the demo laptop without signing in. Stardog sees one shared account, and the audit log tells them apart only by the names they typed. Once each signs in with their own Stardog account, every entry carries a verified account, and owner approval can be required for their groups.' },
+      { type: 'story', title: 'Story: why "Your Name" isn\'t a login', text: 'Two people share the demo laptop without signing in. Stardog sees one shared account, and the audit log tells them apart only by the names they typed. Once each signs in with their own Stardog account, every entry also records the Stardog account they signed in as (a record, not proof; Stardog\'s own logs are the authority), and owner approval can be required for their groups.' },
       { type: 'cannot', items: [
         'Manage Stardog users, roles or permissions.',
         'Make owner approval a Stardog permission. It is a workflow rule the app enforces; anyone with write access to the database could still change the governance graph directly.',
