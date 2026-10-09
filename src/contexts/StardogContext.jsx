@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { querySparql, listDatabases, getBindings, val, hasPendingWrites, requestToken, fetchIdentity, tokenAccount } from '../lib/sparql';
-import { CLASSES_QUERY, PROPERTIES_QUERY, INSTANCE_COUNTS_QUERY, NAMED_GRAPHS_QUERY, SHACL_SHAPES_QUERY } from '../lib/ontologyQueries';
+import { CLASSES_QUERY, PROPERTIES_QUERY, INSTANCE_COUNTS_QUERY, NAMED_GRAPHS_QUERY, SHACL_SHAPES_QUERY, isBuiltInTerm } from '../lib/ontologyQueries';
 import { fetchStatuses, fetchStewards, setActingAccount } from '../lib/governance';
 import { loadJson, saveJson, loadText, saveText, removeKey } from '../lib/storage';
 import { readHash, updateHash } from '../lib/urlState';
@@ -82,10 +82,11 @@ export function StardogProvider({ children }) {
       const classRes = await querySparql(endpoint, db, token, CLASSES_QUERY);
       const propRes = await querySparql(endpoint, db, token, PROPERTIES_QUERY);
       if (!isCurrent()) return;
+      // Standard vocabularies (SKOS, Dublin Core, the app's governance terms) are not the user's terms
       setClasses(getBindings(classRes).map(b => ({
         uri: val(b, 'class'), label: val(b, 'label'), comment: val(b, 'comment'), type: val(b, 'type'),
-      })));
-      const props = getBindings(propRes).map(b => ({
+      })).filter(c => !isBuiltInTerm(c.uri)));
+      const props = getBindings(propRes).filter(b => !isBuiltInTerm(val(b, 'prop'))).map(b => ({
         uri: val(b, 'prop'), label: val(b, 'label'), comment: val(b, 'comment'),
         type: val(b, 'type'),
         domain: val(b, 'soDomain') || val(b, 'rdfsDomain'),

@@ -67,7 +67,7 @@ export default function TermDetail({ term }) {
             </h2>
             <span className="uri" style={{ fontSize: '0.72rem' }}>{toPrefixed(term.uri)}</span>
           </div>
-          <span className={`status-badge status-${statusKey(status)}`}>{status}</span>
+          <span className={`status-badge status-${statusKey(status)}`}>{status === 'UnderReview' ? 'Under Review' : status}</span>
         </div>
         {term.comment && (
           <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>

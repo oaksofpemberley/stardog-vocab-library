@@ -139,3 +139,13 @@ describe('owner approval tied to Stardog accounts', () => {
     }
   });
 });
+
+describe('editorial notes', () => {
+  it('are written together with an audit entry, so the Audit Log shows them', async () => {
+    await gov.addEditorialNote('E', 'db', '', 'urn:t', 'Check SI prefix wording', 'me');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain('EditorialNote');
+    expect(sent[0]).toContain('AuditEntry');
+    expect(literals(sent[0])).toContain('note_added');
+  });
+});

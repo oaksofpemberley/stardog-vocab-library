@@ -56,7 +56,7 @@ export default function ImpactAnalysis({ termUri, termLabel }) {
               {severity === 'safe' ? 'Safe to Modify' : severity === 'moderate' ? 'Moderate Impact' : 'High Impact'}
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              {totalImpacts === 0 ? 'No dependencies found.' : `${totalImpacts} dependency${totalImpacts === 1 ? '' : 'ies'} detected.`}
+              {totalImpacts === 0 ? 'No dependencies found.' : `${totalImpacts} ${totalImpacts === 1 ? 'dependency' : 'dependencies'} detected.`}
             </div>
           </div>
         </div>
@@ -103,7 +103,7 @@ export default function ImpactAnalysis({ termUri, termLabel }) {
                   </div>
                 </div>
                 <code style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                  {toPrefixed(imp.term)}
+                  {imp.term}
                 </code>
               </div>
             ))}

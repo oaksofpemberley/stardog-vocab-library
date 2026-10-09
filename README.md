@@ -45,9 +45,13 @@ Open [http://localhost:5180](http://localhost:5180), pick a database from the dr
 To try the Communities features, load the sample (three groups that define "orders of magnitude", "model", "validation" and more differently):
 
 ```bash
-stardog-admin db create -n vocab_communities_demo
-stardog data add vocab_communities_demo samples/multi-community-vocabulary.trig
+stardog-admin db create -n vocab_communities_demo \
+  -o voicebox.enabled=true search.enabled=true search.semantic.enabled=true query.all.graphs=true \
+  -- samples/multi-community-vocabulary.trig
+stardog data add -g tag:stardog:api:context:schema -- vocab_communities_demo samples/voicebox-schema.ttl
 ```
+
+The `-o` options and the second command are only needed for Voicebox (see below). In-app, **Help → Quick Start** walks through the whole flow.
 
 ### Configuration
 
@@ -106,6 +110,18 @@ What the browser keeps across a refresh:
 | Unsent text (notes, steward, proposal form, review comment) | `localStorage` drafts, per database and term | Yes | No |
 
 If a save is still in progress, the browser asks before leaving the page. If a save fails, the app shows the error and keeps what you typed.
+
+## Voicebox
+
+Approved changes are written to Stardog, so Stardog Voicebox can answer questions about them right away. For example: "Which terms in other groups are mapped to the Physics term 'orders of magnitude'?" or "Who approved that mapping, and why?" This only works if the database is set up for it:
+
+1. **Database options:** `voicebox.enabled`, `search.enabled`, `search.semantic.enabled`, and `query.all.graphs=true`. The vocabularies, `VOCAB:MAPPINGS` and `VOCAB:GOVERNANCE` are all named graphs, and without `query.all.graphs` Voicebox only sees the default graph. Set the options when you create the database (as above). On an existing database, the first three can only be changed while it is offline.
+2. **Schema:** load `samples/voicebox-schema.ttl` into `tag:stardog:api:context:schema`. Voicebox writes its queries from that graph. The file describes SKOS terms and mappings and the app's governance records.
+   - It connects properties to classes with `schema:domainIncludes`, not `rdfs:domain`. Voicebox asks with reasoning on, and `rdfs:domain` would retype data.
+   - It declares the mapping relations symmetric or inverse, as in the SKOS standard, so a mapping is found from either end.
+   - It tells Voicebox that labels are language-tagged.
+
+Without these, the app still works, but Voicebox says it cannot find the terms or mappings.
 
 ## Security notes
 

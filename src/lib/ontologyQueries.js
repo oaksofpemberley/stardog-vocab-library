@@ -131,8 +131,9 @@ export function impactQuery(termUri) {
 PREFIX so: <https://schema.org/>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX sh: <http://www.w3.org/ns/shacl#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 
-SELECT ?relationship ?relatedTerm ?relatedLabel WHERE {
+SELECT DISTINCT ?relationship ?relatedTerm ?relatedLabel WHERE {
   {
     ?relatedTerm so:domainIncludes ${sparqlIri(termUri)} .
     BIND("property with this domain" AS ?relationship)
@@ -153,6 +154,12 @@ SELECT ?relationship ?relatedTerm ?relatedLabel WHERE {
     ?relatedTerm sh:targetClass ${sparqlIri(termUri)} .
     BIND("SHACL shape target" AS ?relationship)
     OPTIONAL { ?relatedTerm rdfs:label ?relatedLabel }
+  } UNION {
+    # Other groups' terms mapped to or from this one: changing or deprecating it affects them
+    VALUES ?mapping { skos:exactMatch skos:closeMatch skos:broadMatch skos:narrowMatch skos:relatedMatch }
+    { ?relatedTerm ?mapping ${sparqlIri(termUri)} } UNION { ${sparqlIri(termUri)} ?mapping ?relatedTerm }
+    BIND("mapped term (SKOS mapping)" AS ?relationship)
+    OPTIONAL { ?relatedTerm skos:prefLabel ?relatedLabel }
   }
 }
 `;
@@ -219,3 +226,21 @@ SELECT DISTINCT ?g ?type WHERE {
 }
 `;
 }
+
+/**
+ * Namespaces of standard and app-internal vocabularies (SKOS itself, Dublin Core, the app's
+ * governance terms, ...). They are often loaded into the schema graph so Voicebox understands
+ * the data, but they are not the user's vocabulary, so the Explorer does not list them.
+ */
+export const BUILT_IN_NAMESPACES = [
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+  'http://www.w3.org/2000/01/rdf-schema#',
+  'http://www.w3.org/2002/07/owl#',
+  'http://www.w3.org/2001/XMLSchema#',
+  'http://www.w3.org/2004/02/skos/core#',
+  'http://purl.org/dc/terms/',
+  'https://schema.org/',
+  'http://vocab.gov/ontology#',
+];
+
+export const isBuiltInTerm = (uri) => BUILT_IN_NAMESPACES.some(ns => uri.startsWith(ns));

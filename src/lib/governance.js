@@ -139,6 +139,7 @@ export async function addEditorialNote(endpoint, db, token, termUri, note, actor
           ${g('noteText')} ${str(note)} ;
           ${g('author')} ${str(actor)} ;
           ${g('createdDate')} ${now()} .
+        ${auditTriples(termUri, 'note_added', actor, note)}
       }
     }
   `;

@@ -1,0 +1,129 @@
+# Schema that lets Stardog Voicebox answer questions about the vocabularies, mappings
+# and governance records this app manages. Voicebox writes its SPARQL from the schema in
+# the named graph tag:stardog:api:context:schema; without it, it cannot see SKOS terms,
+# mappings or proposals at all.
+#
+# Load it into that graph, e.g.:
+#   stardog data add -g tag:stardog:api:context:schema <db> samples/voicebox-schema.ttl
+#
+# Properties are connected to classes with schema:domainIncludes / schema:rangeIncludes
+# (Voicebox uses them to write its queries). schema:domainIncludes/schema:rangeIncludes are avoided on purpose:
+# Voicebox asks with reasoning on, and they would retype data (e.g. make every group a Concept).
+# The mapping properties are declared symmetric / inverse as in the SKOS standard, so with
+# reasoning a mapping can be found from either end.
+
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix gov:  <http://vocab.gov/ontology#> .
+@prefix schema: <https://schema.org/> .
+
+# ── Vocabularies (SKOS) ──
+
+skos:ConceptScheme a owl:Class ;
+  rdfs:label "Concept scheme (group vocabulary)" ;
+  rdfs:comment "A group's vocabulary: the set of concepts one team or community uses, e.g. Physics or Business Administration. Its name is its skos:prefLabel." .
+
+skos:Concept a owl:Class ;
+  rdfs:label "Concept (term)" ;
+  rdfs:comment "A term as defined by one group. The same label can be a different concept in another group." .
+
+skos:prefLabel a owl:DatatypeProperty ;
+  rdfs:label "preferred label" ;
+  rdfs:comment "The name of a term or of a group, as the group writes it. Labels are usually language-tagged (e.g. \"orders of magnitude\"@en), so compare with STR(), e.g. FILTER(LCASE(STR(?label)) = \"orders of magnitude\")." ;
+  schema:domainIncludes skos:Concept, skos:ConceptScheme ; schema:rangeIncludes xsd:string .
+
+skos:altLabel a owl:DatatypeProperty ;
+  rdfs:label "alternative label" ; rdfs:comment "Another name or abbreviation the group uses for the term." ;
+  schema:domainIncludes skos:Concept ; schema:rangeIncludes xsd:string .
+
+skos:definition a owl:DatatypeProperty ;
+  rdfs:label "definition" ; rdfs:comment "What the term means in this group (or, for a group, what the group covers). Usually language-tagged." ;
+  schema:domainIncludes skos:Concept, skos:ConceptScheme ; schema:rangeIncludes xsd:string .
+
+skos:inScheme a owl:ObjectProperty ;
+  rdfs:label "in group" ; rdfs:comment "The group (concept scheme) whose vocabulary this term belongs to." ;
+  schema:domainIncludes skos:Concept ; schema:rangeIncludes skos:ConceptScheme .
+
+dct:creator a owl:DatatypeProperty ;
+  rdfs:label "declared owner" ; rdfs:comment "Owner of a group as declared in the vocabulary data (not the group's name)." ;
+  schema:domainIncludes skos:ConceptScheme ; schema:rangeIncludes xsd:string .
+
+# Mappings between groups' terms. Approved mappings live in the named graph VOCAB:MAPPINGS;
+# mappings stated in a group's own data are "asserted" and were not reviewed.
+
+skos:exactMatch a owl:ObjectProperty, owl:SymmetricProperty ;
+  rdfs:label "exact match" ; rdfs:comment "Mapping: the two terms are interchangeable in any context." ;
+  schema:domainIncludes skos:Concept ; schema:rangeIncludes skos:Concept .
+
+skos:closeMatch a owl:ObjectProperty, owl:SymmetricProperty ;
+  rdfs:label "close match" ; rdfs:comment "Mapping: interchangeable in some contexts, but not everywhere." ;
+  schema:domainIncludes skos:Concept ; schema:rangeIncludes skos:Concept .
+
+skos:broadMatch a owl:ObjectProperty ;
+  rdfs:label "broad match" ; rdfs:comment "Mapping: the target term is broader than the source term." ;
+  schema:domainIncludes skos:Concept ; schema:rangeIncludes skos:Concept .
+
+skos:narrowMatch a owl:ObjectProperty ; owl:inverseOf skos:broadMatch ;
+  rdfs:label "narrow match" ; rdfs:comment "Mapping: the target term is narrower than the source term." ;
+  schema:domainIncludes skos:Concept ; schema:rangeIncludes skos:Concept .
+
+skos:relatedMatch a owl:ObjectProperty, owl:SymmetricProperty ;
+  rdfs:label "related match" ; rdfs:comment "Mapping: associated but different terms; not interchangeable." ;
+  schema:domainIncludes skos:Concept ; schema:rangeIncludes skos:Concept .
+
+# ── Governance records (named graph VOCAB:GOVERNANCE) ──
+
+gov:ChangeProposal a owl:Class ;
+  rdfs:label "Change proposal" ;
+  rdfs:comment "A proposed change to the vocabularies (add, modify, deprecate, map terms, remove a mapping) and its review." .
+
+gov:proposalType a owl:DatatypeProperty ;
+  rdfs:label "proposal type" ; rdfs:comment "add, modify, deprecate, mapping or unmap." ;
+  schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:string .
+
+gov:proposalTitle a owl:DatatypeProperty ;
+  rdfs:label "title" ; schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:string .
+
+gov:proposalDescription a owl:DatatypeProperty ;
+  rdfs:label "justification" ;
+  rdfs:comment "The proposer's justification: why the change was proposed (for a mapping, why the two terms are related). This is the justification; the reviewer's remark is gov:reviewComment." ;
+  schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:string .
+
+gov:proposalStatus a owl:DatatypeProperty ;
+  rdfs:label "status" ; rdfs:comment "pending, approved or rejected." ;
+  schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:string .
+
+gov:proposedBy a owl:DatatypeProperty ;
+  rdfs:label "proposed by" ; schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:string .
+
+gov:proposedDate a owl:DatatypeProperty ;
+  rdfs:label "proposed on" ; schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:dateTime .
+
+gov:reviewedBy a owl:DatatypeProperty ;
+  rdfs:label "reviewed by" ; rdfs:comment "Who approved or rejected the proposal." ;
+  schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:string .
+
+gov:reviewComment a owl:DatatypeProperty ;
+  rdfs:label "review comment" ;
+  rdfs:comment "The reviewer's remark when approving or rejecting. Not the justification (see gov:proposalDescription)." ;
+  schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:string .
+
+gov:reviewDate a owl:DatatypeProperty ;
+  rdfs:label "reviewed on" ; schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes xsd:dateTime .
+
+gov:mappingSource a owl:ObjectProperty ;
+  rdfs:label "mapping source term" ; schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes skos:Concept .
+
+gov:mappingTarget a owl:ObjectProperty ;
+  rdfs:label "mapping target term" ; schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes skos:Concept .
+
+gov:mappingRelation a owl:ObjectProperty ;
+  rdfs:label "mapping relation" ; rdfs:comment "The SKOS mapping property proposed (e.g. skos:closeMatch)." ;
+  schema:domainIncludes gov:ChangeProposal .
+
+gov:targetTerm a owl:ObjectProperty ;
+  rdfs:label "target term" ; rdfs:comment "The term a proposal or note is about." ;
+  schema:domainIncludes gov:ChangeProposal ; schema:rangeIncludes skos:Concept .
