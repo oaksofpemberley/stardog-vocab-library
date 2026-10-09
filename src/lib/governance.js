@@ -32,8 +32,9 @@ function newId(kind) {
 }
 
 /**
- * The Stardog account the current user is verified as (see fetchIdentity), recorded on every
- * audit entry, proposal and review next to the self-reported name. Set by StardogContext.
+ * The Stardog account the app is signed in as (Stardog confirms it at sign-in, see fetchIdentity),
+ * recorded on every audit entry, proposal and review next to the self-reported name. Set by
+ * StardogContext. The stored value is written by the client, so it is a record, not proof.
  */
 let actingAccount = null;
 export function setActingAccount(account) { actingAccount = account || null; }
@@ -329,13 +330,17 @@ export function hasStructuredChange(p) {
  * homes: { term?: {graph, isConcept}, scheme?: {graph} } from findHome().
  *
  * Owner approval: when requiredAccounts is non-empty, only those Stardog accounts may review.
+ * This is enforced by the app, not by Stardog: the accounts are written by the client, so anyone
+ * with write access to the database can bypass or forge them. Use Stardog permissions for hard limits.
  * An approval is recorded per account, and the change is applied (and the proposal closed)
  * only in the request where the last required account approves; the check runs inside
  * Stardog's transaction, so two owners approving at the same time still apply it once.
  * A rejection by any required owner closes the proposal.
  */
-export function buildReviewUpdate(proposal, decision, reviewer, comment, homes = {}, { account = actingAccount, requiredAccounts = [] } = {}) {
+export function buildReviewUpdate(proposal, decision, reviewer, comment, homes = {}, { requiredAccounts = [] } = {}) {
   requireOneOf(decision, DECISIONS, 'decision');
+  // Always the account the app signed in as; callers cannot review on another account's behalf
+  const account = actingAccount;
   const gated = requiredAccounts.length > 0;
   if (gated && !requiredAccounts.includes(account)) {
     throw new Error(`Only the owners of the affected groups can review this: ${requiredAccounts.join(', ')}.`);

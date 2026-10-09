@@ -103,7 +103,7 @@ export default function ReviewQueue() {
     try {
       const { required } = approvalState(proposal);
       await reviewProposal(endpoint, db, token, proposal, decision, actor, review.comment || 'Approved',
-        { requiredAccounts: required, account: identity?.account || null });
+        { requiredAccounts: required });
       setReview({ id: null, comment: '' });
       await refreshGovernance();
       await Promise.all([load(), community.reload()]);

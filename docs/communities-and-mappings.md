@@ -75,7 +75,7 @@ Stardog can already store SKOS vocabularies and mappings and expose them to quer
 ### R5. Ownership tied to Stardog accounts (optional)
 - R5.1 Users can sign in with their own Stardog username and password. The password is exchanged once for a Stardog-issued token (`GET /admin/token`) and is never stored; the token is kept in sessionStorage. Without sign-in, requests run as the proxy's shared account.
 - R5.2 The app asks Stardog which account it is acting as (the subject of a token Stardog issues for the current credentials) and shows it in the sidebar ("Signed in as …" or "Shared account: …").
-- R5.3 Every audit entry, proposal and review records that verified account next to the self-reported name.
+- R5.3 Every audit entry, proposal and review records that account next to the self-reported name. Reviews always use the account the app signed in as; a caller cannot pass another one. The stored value is written by the client, so it is a record, not proof; Stardog's own audit log is the authority on who wrote what.
 - R5.4 A group's owner can be a Stardog account (picked from the server's account list when the user may list accounts, otherwise typed) or a plain name.
 - R5.5 A per-database setting, **Require group owners to approve changes to their group** (off by default), works as follows:
   - **Who must approve:** a proposal that touches a group owned by an account needs that account's approval. A mapping between two such groups needs both owners. Groups owned by a plain name add no requirement.

@@ -92,14 +92,20 @@ describe('owner approval tied to Stardog accounts', () => {
   const opsOf = (u) => operations(u);
   const required = { requiredAccounts: ['alice', 'bob'] };
 
-  it('only the required owners may approve or reject', () => {
-    expect(() => gov.buildReviewUpdate(P, 'approved', 'Mallory', '', {}, { ...required, account: 'mallory' })).toThrow(/Only the owners/);
-    expect(() => gov.buildReviewUpdate(P, 'rejected', 'Mallory', '', {}, { ...required, account: null })).toThrow(/Only the owners/);
-    expect(() => gov.buildReviewUpdate(P, 'rejected', 'Bob', 'no', {}, { ...required, account: 'bob' })).not.toThrow();
+  const as = (account, fn) => { gov.setActingAccount(account); try { return fn(); } finally { gov.setActingAccount(null); } };
+
+  it('only the required owners may approve or reject, as the signed-in account', () => {
+    expect(() => as('mallory', () => gov.buildReviewUpdate(P, 'approved', 'Mallory', '', {}, required))).toThrow(/Only the owners/);
+    expect(() => as(null, () => gov.buildReviewUpdate(P, 'rejected', 'Mallory', '', {}, required))).toThrow(/Only the owners/);
+    expect(() => as('bob', () => gov.buildReviewUpdate(P, 'rejected', 'Bob', 'no', {}, required))).not.toThrow();
+  });
+
+  it('ignores an account passed by the caller (cannot review on another account\'s behalf)', () => {
+    expect(() => as('mallory', () => gov.buildReviewUpdate(P, 'approved', 'X', '', {}, { ...required, account: 'alice' }))).toThrow(/Only the owners/);
   });
 
   it('records the approval once per account, and applies only when every required owner has approved', () => {
-    const ops = opsOf(gov.buildReviewUpdate(P, 'approved', 'Alice', 'ok', {}, { ...required, account: 'alice' }));
+    const ops = opsOf(as('alice', () => gov.buildReviewUpdate(P, 'approved', 'Alice', 'ok', {}, required)));
     // 1st op: this owner's approval, skipped if already recorded
     const first = JSON.stringify(ops[0]);
     expect(first).toContain('OwnerApproval');
@@ -117,7 +123,7 @@ describe('owner approval tied to Stardog accounts', () => {
   });
 
   it('without required owners, review works as before (no approval records)', () => {
-    const u = gov.buildReviewUpdate(P, 'approved', 'Anyone', 'ok', {}, { account: null });
+    const u = gov.buildReviewUpdate(P, 'approved', 'Anyone', 'ok', {});
     expect(u).not.toContain('OwnerApproval');
   });
 

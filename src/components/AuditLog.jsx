@@ -34,7 +34,7 @@ export default function AuditLog() {
             <History size={22} color="var(--accent)" /> Audit Log
           </h2>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
-            {entries.length} entries · Recorded change history (names are self-reported; tags show the verified Stardog account)
+            {entries.length} entries · Recorded change history (names are self-reported; tags show the Stardog account the app was signed in as)
           </p>
         </div>
         <select className="select" style={{ width: 'auto', minWidth: 160 }}
@@ -57,7 +57,7 @@ export default function AuditLog() {
                 <div className="timeline-time">{new Date(entry.timestamp).toLocaleString()}</div>
                 <div className="timeline-text">
                   <span className="timeline-actor">{entry.actor}</span>
-                  {entry.account && <span className="owner-account-tag" title="Stardog account verified by the server">{entry.account}</span>}{' '}
+                  {entry.account && <span className="owner-account-tag" title="Stardog account the app was signed in as (recorded by the app; not tamper-proof)">{entry.account}</span>}{' '}
                   <span>{entry.action.replace(/_/g, ' ')}</span>
                 </div>
                 {entry.termUri && (
