@@ -123,19 +123,35 @@ Approved changes are written to Stardog, so Stardog Voicebox can answer question
 
 Without these, the app still works, but Voicebox says it cannot find the terms or mappings.
 
+## Secured setup: Stardog enforces who may change what
+
+The owner-approval rule above is enforced by the app. To have **Stardog itself** refuse changes, use named-graph security. The script below sets up a demo of it on a database built from the sample:
+
+```bash
+STARDOG_ADMIN_USER=admin STARDOG_ADMIN_PASSWORD=... scripts/setup-secured-demo.sh   # creates vocab_communities_secured
+```
+
+It uses only Stardog's HTTP API and is safe to re-run. Each run rebuilds the database and gives every account a new random password, written to `demo-accounts.local` (gitignored). It turns on `security.named.graphs` and grants:
+
+| Account | Reads | May write | So it can |
+|---------|-------|-----------|-----------|
+| `vocab_app` (the app's shared proxy account) | everything in the database | `VOCAB:GOVERNANCE` | propose and comment; not apply any change |
+| `alice` (Physics owner) | everything | `VOCAB:GOVERNANCE`, `urn:vocab:physics`, `VOCAB:MAPPINGS` | apply changes to Physics, write approved mappings |
+| `bob` (Business owner) | everything | `VOCAB:GOVERNANCE`, `urn:vocab:business`, `VOCAB:MAPPINGS` | apply changes to Business, write approved mappings |
+| `carol` (member) | everything | `VOCAB:GOVERNANCE` | propose and comment only |
+
+Then put the `vocab_app` lines from `demo-accounts.local` in `.env`, restart `npm run dev`, sign in as alice, and in **Communities → Groups** assign Physics → account `alice` and Business Administration → account `bob`, then turn on owner approval. What to expect:
+
+- **Writes Stardog refuses:** anything outside an account's grants, even through direct SPARQL that bypasses the app. The app explains the refusal ("Stardog refused this change: the Stardog account in use may not write to urn:vocab:physics…"). Because an approval is one transaction, a refused approval changes nothing and the proposal stays pending.
+- **What the app adds on top:** the two-owner rule for a mapping between groups. Stardog can say who may write `VOCAB:MAPPINGS`, but not "both owners must agree".
+- **Limits:**
+  - Proposals and reviews must stay writable for everyone who takes part, so `VOCAB:GOVERNANCE` itself is not protected per entry.
+  - With named-graph security, new graphs (a new group's vocabulary) need their own grants.
+  - Stardog's own audit log, the tamper-proof record of who wrote what, is a server setting (`stardog.properties`) and needs a server restart. The script does not change it.
+
 ## Security notes
 
-- **Use a least-privilege Stardog account for the proxy, not `admin`.** The app needs `read` on the databases it browses and `write` on the ones where you record governance. It never needs to create or drop databases or manage users. For example:
-
-  ```bash
-  stardog-admin role add vocab_app_role
-  stardog-admin role grant -a read  -o "db:*" vocab_app_role
-  stardog-admin role grant -a write -o "db:*" vocab_app_role
-  # create a user (see: stardog-admin help user add), then:
-  stardog-admin user addrole -R vocab_app_role vocab_app
-  ```
-
-  Put that user in `.env` as `STARDOG_USERNAME` / `STARDOG_PASSWORD`. Narrow `db:*` to specific databases where you can.
+- **Use a least-privilege Stardog account for the proxy, not `admin`.** `scripts/setup-secured-demo.sh` (below) creates `vocab_app` for this. It can read and write data but cannot create or drop databases or manage users. Put it in `.env` as `STARDOG_USERNAME` / `STARDOG_PASSWORD`.
 - **The dev proxy is for local use.** Anyone who can reach port 5180 acts as the proxy's Stardog user. Vite listens on `localhost` only by default; do not start it with `--host` on a shared network. The proxy only adds credentials to same-origin requests, so other websites cannot use it (CSRF).
 - **Sign in with personal Stardog accounts for accountable attribution.** The name in "Your Name" is self-reported. When users sign in, the app records the Stardog account Stardog itself reports (via a token it issues) on every audit entry, proposal and review. With the shared proxy login, everyone appears as the proxy's account. The password is used once to obtain a token and is never stored. The recorded account is written by the app, so someone writing to the database directly could forge it: treat it as a record, and use Stardog's own audit logging when you need proof of who changed what.
 - **Owner approval is an app-enforced workflow, not a Stardog permission.** With "Require group owners to approve" on, the app only lets the owning accounts approve changes to their groups, hand groups over, or switch the rule off. Anyone with `write` on the database can still change the governance graph directly, so the audit log is a record, not tamper-proof evidence. For hard enforcement, use Stardog permissions on the graphs.

@@ -11,7 +11,7 @@ export default function GroupsView() {
   const { endpoint, db, token, connection, identity, getTermSteward } = useStardog();
   const data = useCommunityData();
   const { schemes, concepts, mappings, loading, error, settings } = data;
-  // Stardog accounts to pick owners from (null when this user may not list accounts)
+  // Stardog accounts to suggest as owners (often just the user's own: most accounts may only list themselves)
   const [accounts, setAccounts] = useState(null);
   const [settingError, setSettingError] = useState(null);
   useEffect(() => { listUsers(endpoint, token).then(setAccounts); }, [endpoint, token]);
@@ -139,15 +139,14 @@ function GroupCard({ scheme, data, accounts, ownerApprovalOn, concepts, mappingC
           <option value="account">Stardog account</option>
           <option value="name">Name</option>
         </select>
-        {draft.kind === 'account' && accounts ? (
-          <select className="select" value={draft.value} onChange={e => set({ value: e.target.value })} aria-label="Stardog account">
-            <option value="">Choose an account…</option>
-            {accounts.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-        ) : (
-          <input className="input" value={draft.value} onChange={e => set({ value: e.target.value })}
-            placeholder={draft.kind === 'account' ? 'Stardog username' : 'Name or team'}
-            onKeyDown={e => e.key === 'Enter' && assignOwner()} />
+        {/* Typed, with suggestions: most accounts may only list themselves, so a closed list would hide everyone else */}
+        <input className="input" value={draft.value} onChange={e => set({ value: e.target.value })}
+          placeholder={draft.kind === 'account' ? 'Stardog username' : 'Name or team'}
+          list={draft.kind === 'account' && accounts ? `accounts-${scheme.uri}` : undefined}
+          aria-label={draft.kind === 'account' ? 'Stardog account' : 'Owner name'}
+          onKeyDown={e => e.key === 'Enter' && assignOwner()} />
+        {draft.kind === 'account' && accounts && (
+          <datalist id={`accounts-${scheme.uri}`}>{accounts.map(a => <option key={a} value={a} />)}</datalist>
         )}
         <button className="btn btn-secondary btn-sm" onClick={assignOwner} disabled={saving || !draft.value.trim()}>Assign</button>
       </div>

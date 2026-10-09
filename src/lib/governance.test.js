@@ -149,3 +149,13 @@ describe('editorial notes', () => {
     expect(literals(sent[0])).toContain('note_added');
   });
 });
+
+describe('refused writes', () => {
+  it('explain a Stardog permission denial in plain words', async () => {
+    const { describeUpdateError } = await import('./sparql');
+    const body = JSON.stringify({ message: 'com.complexible.stardog.plan.eval.ExecutionException: User does not have permissions to update the named graph VOCAB:MAPPINGS', code: 'SE0012' });
+    expect(describeUpdateError(500, body)).toMatch(/Stardog refused this change.*may not write to VOCAB:MAPPINGS.*Sign in/);
+    expect(describeUpdateError(403, 'Forbidden')).toMatch(/Stardog refused this change/);
+    expect(describeUpdateError(400, '{"message":"bad query"}')).toBe('SPARQL Update Error (400): bad query');
+  });
+});

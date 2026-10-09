@@ -93,6 +93,25 @@ Stardog can already store SKOS vocabularies and mappings and expose them to quer
 - a proposal touching only a group without an account owner can be approved by anyone;
 - a proposal touching only another owner's group cannot be reviewed by a non-owner.
 
+### R6. Stardog-enforced permissions (secured setup)
+- R6.1 A setup script (`scripts/setup-secured-demo.sh`, HTTP API only, re-runnable) creates a database with `security.named.graphs=true` and grants per named graph:
+  - everyone reads everything and writes `VOCAB:GOVERNANCE`;
+  - each group owner also writes their group's vocabulary graph and `VOCAB:MAPPINGS`;
+  - the app's shared proxy account (`vocab_app`) is not an admin.
+- R6.2 Stardog refuses writes outside these grants, including direct SPARQL that bypasses the app.
+- R6.3 Because an approval is one update request, a refused approval changes nothing; the proposal stays pending.
+- R6.4 The app explains a refusal in plain words, naming the graph.
+- R6.5 Owner account fields accept typed usernames with suggestions, because most accounts may only list themselves.
+
+**Accepted when:**
+- the shared account can propose but its approval is refused;
+- alice's approval of a Physics ↔ Business mapping is recorded but applies nothing;
+- bob's approval applies it;
+- with the app's rule off, bob still cannot change the Physics vocabulary;
+- `vocab_app` cannot create or drop databases.
+
+All five were verified on 2026-10-09.
+
 ### Non-functional requirements
 - N1 All user-supplied text is escaped and all IRIs validated (`sparqlString` / `sparqlIri`). No raw interpolation into SPARQL.
 - N2 Nothing typed is lost on refresh. The selected view and shared label live in the URL, and unsent proposal input is kept as a draft.
@@ -152,7 +171,7 @@ The **Review Queue** "New proposal" form gains the add/modify fields and the map
 `samples/multi-community-vocabulary.trig` has three groups (Computer Science, Physics, Business Administration), each in its own named graph. Several labels overlap ("orders of magnitude", "model", "validation", "resolution"), each group defines them differently, and one mapping is asserted in the data so asserted and governed mappings can be compared.
 
 ## Out of scope (possible next steps)
-- Enforcing owner approval with Stardog permissions (named-graph security on `VOCAB:MAPPINGS` and the vocabulary graphs) instead of in the app.
+- The "both owners" rule in Stardog itself (it can restrict who writes `VOCAB:MAPPINGS`, not require two parties); Stardog's server audit log (needs a server restart).
 - Semantic matching of definitions. Similar-wording suggestions are lexical (labels only). Voicebox or embeddings could also compare definitions and suggest a relation.
 - Editing language-tagged labels per language.
 - OWL classes as group members (groups are SKOS concept schemes; OWL ontologies would need a membership convention such as `rdfs:isDefinedBy`).

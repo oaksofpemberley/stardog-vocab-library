@@ -84,7 +84,7 @@ export async function updateSparql(endpoint, db, token, update) {
       signal: controller.signal,
     });
     clearTimeout(timer);
-    if (!res.ok) throw new Error(`SPARQL Update Error (${res.status}): ${await res.text()}`);
+    if (!res.ok) throw new Error(describeUpdateError(res.status, await res.text()));
     return true;
   } catch (e) {
     clearTimeout(timer);
@@ -165,6 +165,22 @@ export async function listUsers(endpoint, token) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Turn Stardog's error for a refused write into something a reviewer can act on. With
+ * named-graph security, Stardog itself refuses writes to graphs the account may not change
+ * (e.g. another group's vocabulary); it answers 403, or 500 with "does not have permissions".
+ */
+export function describeUpdateError(status, body) {
+  let message = body;
+  try { message = JSON.parse(body).message || body; } catch { /* not JSON */ }
+  const graph = /named graph (\S+)/.exec(message)?.[1];
+  if (status === 403 || /does not have (read |write )?permissions?/i.test(message)) {
+    return `Stardog refused this change: the Stardog account in use may not write ${graph ? `to ${graph}` : 'here'}. ` +
+      'Sign in as an account that may (for example, the owner of that group).';
+  }
+  return `SPARQL Update Error (${status}): ${String(message).slice(0, 300)}`;
 }
 
 /** Extract bindings array from SPARQL JSON result */
