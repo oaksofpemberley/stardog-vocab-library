@@ -18,7 +18,7 @@ const SKOS = 'http://www.w3.org/2004/02/skos/core#';
 const OWL_DEPRECATED = '<http://www.w3.org/2002/07/owl#deprecated>';
 
 export const STATUSES = ['Draft', 'UnderReview', 'Active', 'Deprecated', 'Retired'];
-export const PROPOSAL_TYPES = ['add', 'modify', 'deprecate', 'mapping'];
+export const PROPOSAL_TYPES = ['add', 'modify', 'deprecate', 'mapping', 'unmap'];
 const DECISIONS = ['approved', 'rejected'];
 
 /** Governance-vocabulary predicate/class IRI */
@@ -156,6 +156,7 @@ export async function fetchNotes(endpoint, db, token, termUri) {
  *   modify:    termUri, proposedLabel? and/or proposedDefinition? (neither = discussion only)
  *   deprecate: termUri
  *   mapping:   mappingSource, mappingRelation (SKOS mapping property), mappingTarget; description = justification
+ *   unmap:     the same three fields, naming an approved mapping to remove; description = reason
  */
 export async function createProposal(endpoint, db, token, proposal) {
   const { type, title, description, proposedBy, changes,
@@ -169,11 +170,13 @@ export async function createProposal(endpoint, db, token, proposal) {
     if (!proposedIri || !proposedLabel) throw new Error('A new term needs an IRI and a label.');
     iri(proposedIri); // validate early, with a clear message
   }
-  if (type === 'mapping') {
+  if (type === 'mapping' || type === 'unmap') {
     if (!mappingSource || !mappingTarget) throw new Error('Select both terms to map.');
     if (mappingSource === mappingTarget) throw new Error('A term cannot be mapped to itself.');
     requireOneOf(mappingRelation, MAPPING_RELATION_IRIS, 'mapping relation');
-    if (!String(description || '').trim()) throw new Error('Explain why these terms are related (justification).');
+    if (!String(description || '').trim()) {
+      throw new Error(type === 'unmap' ? 'Explain why this mapping should be removed.' : 'Explain why these terms are related (justification).');
+    }
     termUri = mappingSource;
   }
   const opt = (pred, value, asIri = false) => (value ? `${g(pred)} ${asIri ? iri(value) : str(value)} ;` : '');
@@ -259,7 +262,7 @@ const inGraph = (graph, body) => (graph ? `GRAPH ${iri(graph)} { ${body} }` : bo
 
 /** Does approving this proposal change the vocabulary (beyond the governance record)? */
 export function hasStructuredChange(p) {
-  return p.type === 'mapping' || p.type === 'deprecate' || p.type === 'add' ||
+  return p.type === 'mapping' || p.type === 'unmap' || p.type === 'deprecate' || p.type === 'add' ||
     (p.type === 'modify' && Boolean(p.proposedLabel || p.proposedDefinition));
 }
 
@@ -287,6 +290,12 @@ export function buildReviewUpdate(proposal, decision, reviewer, comment, homes =
         requireOneOf(proposal.mappingRelation, MAPPING_RELATION_IRIS, 'mapping relation');
         const triple = `${iri(proposal.mappingSource)} ${iri(proposal.mappingRelation)} ${iri(proposal.mappingTarget)} .`;
         ops.push(`INSERT { GRAPH ${iri(GOVERNED_MAPPINGS_GRAPH)} { ${triple} } } WHERE { ${pending} }`);
+        break;
+      }
+      case 'unmap': {
+        requireOneOf(proposal.mappingRelation, MAPPING_RELATION_IRIS, 'mapping relation');
+        const triple = `${iri(proposal.mappingSource)} ${iri(proposal.mappingRelation)} ${iri(proposal.mappingTarget)} .`;
+        ops.push(`DELETE { GRAPH ${iri(GOVERNED_MAPPINGS_GRAPH)} { ${triple} } } WHERE { ${pending} }`);
         break;
       }
       case 'deprecate':
@@ -333,7 +342,7 @@ export function buildReviewUpdate(proposal, decision, reviewer, comment, homes =
 export async function reviewProposal(endpoint, db, token, proposal, decision, reviewer, comment) {
   const homes = {};
   if (decision === 'approved' && hasStructuredChange(proposal)) {
-    if (proposal.termUri && proposal.type !== 'mapping') homes.term = await findHome(endpoint, db, token, proposal.termUri);
+    if (proposal.termUri && (proposal.type === 'modify' || proposal.type === 'deprecate')) homes.term = await findHome(endpoint, db, token, proposal.termUri);
     if (proposal.type === 'add') homes.scheme = await findHome(endpoint, db, token, proposal.proposedScheme);
   }
   await updateSparql(endpoint, db, token, buildReviewUpdate(proposal, decision, reviewer, comment, homes));

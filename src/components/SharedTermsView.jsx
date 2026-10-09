@@ -10,6 +10,12 @@ import { GitCompareArrows, UserCheck } from 'lucide-react';
 export default function SharedTermsView() {
   const data = useCommunityData();
   const shared = useMemo(() => findSharedTerms(data.concepts), [data.concepts]);
+  // Near matches ("rough order of magnitude" vs "orders of magnitude"), shown in the same side-by-side view
+  const similar = useMemo(() => data.similar.map(p => ({
+    key: p.key, kind: 'similar', score: p.score,
+    label: `${p.labelA} ↔ ${p.labelB}`,
+    concepts: [p.a, p.b], schemes: [p.a.scheme, p.b.scheme],
+  })), [data.similar]);
   // The selected label is in the URL so a refresh (or a shared link) returns to it
   const [selectedKey, setSelectedKey] = useState(() => readHash().get('label'));
   const select = (key) => { setSelectedKey(key); updateHash({ label: key }); };
@@ -17,7 +23,13 @@ export default function SharedTermsView() {
   if (data.loading) return <div className="page-pad muted">Finding shared terms…</div>;
   if (data.error) return <div className="page-pad"><div className="connection-status error" role="alert">{data.error}</div></div>;
 
-  const selected = shared.find(s => s.key === selectedKey) || shared[0];
+  // A selected similar pair stays on screen after it is mapped (it then leaves the suggestions list)
+  const pairFromKey = (key) => {
+    if (!key?.startsWith('similar:')) return null;
+    const [a, b] = key.slice('similar:'.length).split('|').map(u => data.conceptByUri.get(u));
+    return a && b ? { key, kind: 'similar', score: null, label: `${a.prefLabel} ↔ ${b.prefLabel}`, concepts: [a, b], schemes: [a.scheme, b.scheme] } : null;
+  };
+  const selected = [...shared, ...similar].find(s => s.key === selectedKey) || pairFromKey(selectedKey) || shared[0] || similar[0];
 
   return (
     <div className="split-h" style={{ height: '100%' }}>
@@ -31,14 +43,28 @@ export default function SharedTermsView() {
             <span className="badge-count" title="Groups using this label">{s.schemes.length}</span>
           </button>
         ))}
+        {similar.length > 0 && (
+          <div className="shared-list-head" style={{ marginTop: 12 }}>
+            <strong>{similar.length}</strong> similar wordings, not yet mapped
+          </div>
+        )}
+        {similar.map(s => (
+          <button key={s.key} className={`shared-item ${selected?.key === s.key ? 'active' : ''}`} onClick={() => select(s.key)}>
+            <span>
+              {s.label}
+              <span className="shared-item-groups">{data.schemeLabel(s.schemes[0])} ↔ {data.schemeLabel(s.schemes[1])}</span>
+            </span>
+            <span className="badge-count" title="Share of words in common">{Math.round(s.score * 100)}%</span>
+          </button>
+        ))}
       </div>
 
       <div className="panel-center split-panel" style={{ padding: 24 }}>
         {!selected ? (
           <div className="empty-state" style={{ height: '100%' }}>
             <GitCompareArrows size={48} />
-            <h3>No shared terms</h3>
-            <p>No label is used by concepts in two or more groups (SKOS concept schemes) in this database.</p>
+            <h3>No shared or similar terms</h3>
+            <p>No label is used, or closely worded, by concepts in two or more groups (SKOS concept schemes) in this database.</p>
           </div>
         ) : (
           <SharedTermDetail key={selected.key} term={selected} data={data} />
@@ -56,7 +82,9 @@ function SharedTermDetail({ term, data }) {
     <div className="fade-in">
       <h2 className="page-title"><GitCompareArrows size={22} color="var(--accent)" /> “{term.label}”</h2>
       <p className="page-subtitle">
-        Used by {term.schemes.length} groups with different meanings. Mappings record how the meanings relate without merging them.
+        {term.kind === 'similar'
+          ? `Similar wording in two groups${term.score != null ? ` (${Math.round(term.score * 100)}% of words in common)` : ''}. Compare the definitions; if they are related, propose a mapping.`
+          : `Used by ${term.schemes.length} groups with different meanings. Mappings record how the meanings relate without merging them.`}
       </p>
 
       <div className="compare-grid">

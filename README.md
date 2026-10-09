@@ -9,8 +9,8 @@ A modern, browser-based vocabulary governance tool for browsing, managing, and a
 - **Ontology Explorer** — Browse classes and properties with namespace-grouped sidebar, search, and status filtering
 - **Graph Visualization** — Interactive D3-powered force-directed graph of class relationships with namespace coloring and lifecycle status indicators
 - **Governance Workflows** — Assign lifecycle statuses (Active, Draft, Under Review, Deprecated, Retired) to any term with full audit logging
-- **Communities** — Each group's SKOS concept scheme shown with its owner; **Shared Terms** puts one label's different meanings side by side; **Mappings** lists asserted, approved, pending and rejected mappings between groups (see [docs/communities-and-mappings.md](docs/communities-and-mappings.md))
-- **Governed changes** — Proposals to add, modify, deprecate or map terms go through review; approving one applies the change (mappings go to the `VOCAB:MAPPINGS` graph) together with its audit entry
+- **Communities** — Each group's SKOS concept scheme shown with its owner; **Shared Terms** puts one label's different meanings side by side and suggests similarly worded terms to map; **Mappings** lists asserted, approved, pending, rejected and retired mappings between groups (see [docs/communities-and-mappings.md](docs/communities-and-mappings.md))
+- **Governed changes** — Proposals to add, modify, deprecate, map terms or remove a mapping go through review; approving one applies the change (mappings go to the `VOCAB:MAPPINGS` graph) together with its audit entry
 - **Designer View** — Hierarchical class diagram with property counts and lifecycle status
 - **Impact Analysis** — Analyze upstream/downstream dependencies before making changes to your vocabulary
 - **SHACL Constraints** — View SHACL shapes and validation rules associated with classes

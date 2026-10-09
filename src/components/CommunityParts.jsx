@@ -5,12 +5,13 @@ import { MAPPING_RELATIONS, relationLabel } from '../lib/communities';
 import { useDraft } from '../lib/useDraft';
 import { Send } from 'lucide-react';
 
-const MAPPING_STATUS_CLASS = { approved: 'active', asserted: 'review', pending: 'draft', rejected: 'retired' };
+const MAPPING_STATUS_CLASS = { approved: 'active', asserted: 'review', pending: 'draft', rejected: 'retired', retired: 'deprecated' };
 const MAPPING_STATUS_TITLE = {
   approved: 'Approved through review; stored in VOCAB:MAPPINGS',
   asserted: 'Stated in a vocabulary\'s own data; not reviewed',
   pending: 'Proposed; waiting for review',
   rejected: 'Proposed and rejected in review',
+  retired: 'Was approved, then removed through review; kept here as history',
 };
 
 export function MappingStatusBadge({ status }) {

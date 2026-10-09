@@ -7,8 +7,8 @@ import { useDraft } from '../lib/useDraft';
 import { useCommunityData } from '../lib/useCommunityData';
 import { ListChecks, Plus, Check, X, FileText } from 'lucide-react';
 
-const TYPE_BADGE = { add: 'draft', modify: 'review', deprecate: 'deprecated', mapping: 'active' };
-const TYPE_LABEL = { add: 'Add term', modify: 'Modify term', deprecate: 'Deprecate term', mapping: 'Map terms' };
+const TYPE_BADGE = { add: 'draft', modify: 'review', deprecate: 'deprecated', mapping: 'active', unmap: 'retired' };
+const TYPE_LABEL = { add: 'Add term', modify: 'Modify term', deprecate: 'Deprecate term', mapping: 'Map terms', unmap: 'Remove mapping' };
 
 /** Suggested IRI for a new term: the group's namespace + the label in PascalCase */
 function suggestIri(schemeUri, label) {
@@ -61,8 +61,9 @@ export default function ReviewQueue() {
     setError(null);
     const d = draft;
     const iri = d.type === 'add' ? (d.iri.trim() || suggestIri(d.scheme, d.label)) : '';
-    const title = d.title.trim() || (d.type === 'mapping'
-      ? `${termName(d.source)} ${relationLabel(d.relation)} ${termName(d.target)}`
+    const isMap = d.type === 'mapping' || d.type === 'unmap';
+    const title = d.title.trim() || (isMap
+      ? `${d.type === 'unmap' ? 'Remove: ' : ''}${termName(d.source)} ${relationLabel(d.relation)} ${termName(d.target)}`
       : d.type === 'add' ? `Add "${d.label}"` : `${TYPE_LABEL[d.type]}: ${termName(d.termUri)}`);
     try {
       await createProposal(endpoint, db, token, {
@@ -71,9 +72,9 @@ export default function ReviewQueue() {
         proposedLabel: d.type === 'add' || d.type === 'modify' ? d.label.trim() : '',
         proposedDefinition: d.type === 'add' || d.type === 'modify' ? d.definition.trim() : '',
         proposedIri: iri, proposedScheme: d.type === 'add' ? d.scheme : '',
-        mappingSource: d.type === 'mapping' ? d.source : '',
-        mappingRelation: d.type === 'mapping' ? d.relation : '',
-        mappingTarget: d.type === 'mapping' ? d.target : '',
+        mappingSource: isMap ? d.source : '',
+        mappingRelation: isMap ? d.relation : '',
+        mappingTarget: isMap ? d.target : '',
       });
       setDraft(EMPTY_PROPOSAL);
       await load();
@@ -106,6 +107,7 @@ export default function ReviewQueue() {
   const ChangeSummary = ({ p }) => {
     const lines = [];
     if (p.type === 'mapping' && p.mappingSource) lines.push(<><strong>{termName(p.mappingSource)}</strong> {relationLabel(p.mappingRelation)} <strong>{termName(p.mappingTarget)}</strong> → VOCAB:MAPPINGS</>);
+    if (p.type === 'unmap' && p.mappingSource) lines.push(<>Remove <strong>{termName(p.mappingSource)}</strong> {relationLabel(p.mappingRelation)} <strong>{termName(p.mappingTarget)}</strong> from VOCAB:MAPPINGS</>);
     if (p.type === 'add' && p.proposedIri) lines.push(<>New term <strong>{p.proposedLabel}</strong> in <strong>{termName(p.proposedScheme)}</strong> <span className="mono-muted">{p.proposedIri}</span></>);
     if (p.type === 'modify' && p.proposedLabel) lines.push(<>Label → <strong>{p.proposedLabel}</strong></>);
     if (p.type === 'modify' && p.proposedDefinition) lines.push(<>Definition → <strong>{p.proposedDefinition}</strong></>);
@@ -184,7 +186,7 @@ export default function ReviewQueue() {
                 </div>
               )}
 
-              {draft.type === 'mapping' && (
+              {(draft.type === 'mapping' || draft.type === 'unmap') && (
                 <>
                   <div className="form-group">
                     <label className="form-label">Source term</label>
@@ -215,7 +217,7 @@ export default function ReviewQueue() {
                 <input className="input" {...field('title')} placeholder="Brief description of the change" />
               </div>
               <div className="form-group">
-                <label className="form-label">{draft.type === 'mapping' ? 'Justification (required)' : 'Description'}</label>
+                <label className="form-label">{draft.type === 'mapping' ? 'Justification (required)' : draft.type === 'unmap' ? 'Reason (required)' : 'Description'}</label>
                 <textarea className="textarea" {...field('desc')} placeholder="Detailed justification for this change..." />
               </div>
             </div>

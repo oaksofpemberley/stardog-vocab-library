@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Parser } from 'sparqljs';
-import { findSharedTerms, normalizeLabel, mergeMappings, MAPPING_RELATIONS } from './communities';
+import { findSharedTerms, findSimilarTerms, labelTokens, pairKey, normalizeLabel, mergeMappings, MAPPING_RELATIONS } from './communities';
 import * as gov from './governance';
 
 const SKOS = 'http://www.w3.org/2004/02/skos/core#';
@@ -117,8 +117,67 @@ describe('mapping proposals', () => {
     await expect(gov.createProposal('E', 'db', '', { ...base, mappingTarget: 'urn:a' })).rejects.toThrow(/itself/);
     await expect(gov.createProposal('E', 'db', '', { ...base, description: '  ' })).rejects.toThrow(/justification/);
     expect(sent).toHaveLength(0);
+    await expect(gov.createProposal('E', 'db', '', { ...base, type: 'unmap', description: '' })).rejects.toThrow(/removed/);
     await gov.createProposal('E', 'db', '', base);
     expect(sent).toHaveLength(1);
     expect(sent[0]).toContain('mappingRelation');
+  });
+});
+
+describe('findSimilarTerms', () => {
+  const concepts = [
+    concept('phys:OoM', 'phys:S', 'orders of magnitude'),
+    concept('biz:ROM', 'biz:S', 'rough order of magnitude', ['ROM']),
+    concept('cs:OoM', 'cs:S', 'orders of magnitude'),          // identical label: a shared term, not "similar"
+    concept('phys:Unc', 'phys:S', 'uncertainty'),
+    concept('biz:FU', 'biz:S', 'forecast uncertainty'),
+    concept('phys:MU', 'phys:S', 'measurement uncertainty'),   // same group as phys:Unc: never paired with it
+    concept('cs:Cache', 'cs:S', 'cache'),
+  ];
+
+  it('stems and drops stop words', () => {
+    expect([...labelTokens('Orders of Magnitude')]).toEqual(['order', 'magnitude']);
+  });
+
+  it('pairs near-identical labels across different groups only', () => {
+    const pairs = findSimilarTerms(concepts).map(p => [pairKey(p.a.uri, p.b.uri), Math.round(p.score * 100)]);
+    expect(pairs).toContainEqual([pairKey('phys:OoM', 'biz:ROM'), 67]);
+    expect(pairs).toContainEqual([pairKey('cs:OoM', 'biz:ROM'), 67]);
+    expect(pairs).toContainEqual([pairKey('phys:Unc', 'biz:FU'), 50]);
+    expect(pairs.some(([k]) => k === pairKey('phys:OoM', 'cs:OoM'))).toBe(false); // identical → Shared Terms
+    expect(pairs.some(([k]) => k === pairKey('phys:Unc', 'phys:MU'))).toBe(false); // same group
+    expect(pairs.every(([, score]) => score >= 50)).toBe(true);
+  });
+
+  it('skips excluded pairs (e.g. already mapped)', () => {
+    const exclude = new Set([pairKey('phys:OoM', 'biz:ROM')]);
+    expect(findSimilarTerms(concepts, { exclude }).some(p => pairKey(p.a.uri, p.b.uri) === pairKey('phys:OoM', 'biz:ROM'))).toBe(false);
+  });
+});
+
+describe('mapping retirement', () => {
+  const close = `${SKOS}closeMatch`;
+  const m = { mappingSource: 'a', mappingRelation: close, mappingTarget: 'b' };
+  it('flags a pending removal on the approved mapping', () => {
+    const rows = mergeMappings([{ source: 'a', relation: close, target: 'b', graph: 'VOCAB:MAPPINGS' }],
+      [{ ...m, type: 'unmap', status: 'pending', description: 'obsolete' }, { ...m, type: 'mapping', status: 'approved' }]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].removalPending.description).toBe('obsolete');
+  });
+  it('shows a removed mapping as retired, with who removed it and why', () => {
+    const rows = mergeMappings([], [
+      { ...m, type: 'unmap', status: 'approved', description: 'groups merged', reviewer: 'r2' },
+      { ...m, type: 'mapping', status: 'approved', description: 'orig' },
+    ]);
+    expect(rows.map(r => r.status)).toEqual(['retired']);
+    expect(rows[0].retiredBy.description).toBe('groups merged');
+    expect(rows[0].proposal.description).toBe('orig');
+  });
+  it('approving removal deletes the triple from VOCAB:MAPPINGS; rejecting deletes nothing', () => {
+    const P = { id: 'http://vocab.gov/ontology#proposal/2', type: 'unmap', termUri: 'urn:a', mappingSource: 'urn:a', mappingRelation: close, mappingTarget: 'urn:b' };
+    const del = (decision) => new Parser().parse(gov.buildReviewUpdate(P, decision, 'rev', 'c')).updates
+      .flatMap(op => (op.delete || []).filter(b => b.name?.value === 'VOCAB:MAPPINGS').flatMap(b => b.triples));
+    expect(del('approved').map(t => `${t.subject.value} ${t.object.value}`)).toEqual(['urn:a urn:b']);
+    expect(del('rejected')).toHaveLength(0);
   });
 });

@@ -588,3 +588,4 @@ body {
 .form-help { font-size: 0.78rem; color: var(--text-muted); margin: 6px 0 10px; }
 .change-summary { font-size: 0.8rem; color: var(--text-secondary); margin: 6px 0; display: flex; flex-direction: column; gap: 2px; }
 .change-summary strong { color: var(--text-primary); }
+.shared-item-groups { display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }

@@ -26,8 +26,12 @@ Stardog can already store SKOS vocabularies and mappings and expose them to quer
 - R2.2 For a selected label, each group's concept is shown side by side: group, owner, preferred label, alternative labels and definition.
 - R2.3 Existing mappings between the side-by-side concepts are shown with their status.
 - R2.4 From this view a user can propose a mapping between any two of the concepts.
+- R2.5 Groups rarely word things identically, so the app also suggests **similar wordings**: concepts in different groups whose labels share most of their content words. Matching drops stop words and plural endings, and needs at least half the words in common. Pairs that already have a mapping (asserted, approved or pending) are left out, so the list is a to-do list. A suggestion opens the same side-by-side view and mapping form.
 
-**Accepted when:** the sample data shows "orders of magnitude" with three different definitions side by side, together with the one mapping asserted in the source data.
+**Accepted when:**
+- the sample data shows "orders of magnitude" with three different definitions side by side, together with the one mapping asserted in the source data;
+- "rough order of magnitude" (Business) is suggested for both Physics and Computer Science "orders of magnitude";
+- a suggested pair disappears from the suggestions once a mapping is proposed for it.
 
 ### R3. Mappings are governed like terms
 - R3.1 Supported relations are the SKOS mapping properties: `exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch`. Each is explained in plain words in the UI.
@@ -39,7 +43,16 @@ Stardog can already store SKOS vocabularies and mappings and expose them to quer
   - **approved**: governed, materialized in `VOCAB:MAPPINGS`;
   - **pending** or **rejected**: proposals.
 
-**Accepted when:** proposing a `closeMatch` between two groups' terms, then approving it, makes the triple appear in `VOCAB:MAPPINGS`, the Mappings view shows it as approved with the justification and approver, and rejecting another proposal writes nothing to `VOCAB:MAPPINGS`.
+- R3.6 An approved mapping can be retired:
+  - removal is proposed with a required reason and reviewed like any other change;
+  - approval deletes the triple from `VOCAB:MAPPINGS`;
+  - the Mappings view keeps the retired mapping as history, with its original justification, the removal reason and both reviewers;
+  - mappings asserted in a group's own data are not removed this way, because they belong to that group.
+
+**Accepted when:**
+- proposing a `closeMatch` between two groups' terms, then approving it, makes the triple appear in `VOCAB:MAPPINGS`, and the Mappings view shows it as approved with the justification and approver;
+- rejecting another proposal writes nothing to `VOCAB:MAPPINGS`;
+- proposing and approving its removal deletes the triple, and the Mappings view lists it as retired.
 
 ### R4. Approved proposals apply their change
 - R4.1 Proposal types and what approval does:
@@ -50,6 +63,7 @@ Stardog can already store SKOS vocabularies and mappings and expose them to quer
   | Modify term | new label and/or new definition | replaces the label/definition in the term's own graph |
   | Deprecate term | — | status `Deprecated` and `owl:deprecated true` in the term's graph |
   | Map terms | source, relation, target, justification | the mapping triple in `VOCAB:MAPPINGS` |
+  | Remove mapping | source, relation, target, reason | deletes that triple from `VOCAB:MAPPINGS` |
 
 - R4.2 The change, the proposal's new status and the audit entry are written in **one** update request, so they are applied together or not at all.
 - R4.3 Every write in an approval is conditional on the proposal still being `pending`, so approving twice (two reviewers, a double click) cannot apply a change twice.
@@ -84,7 +98,7 @@ Governance data stays in `VOCAB:GOVERNANCE` (namespace `gov: <http://vocab.gov/o
 |-----------|---------|
 | `gov:proposedLabel`, `gov:proposedDefinition` | add, modify |
 | `gov:proposedIri`, `gov:proposedScheme` | add |
-| `gov:mappingSource`, `gov:mappingRelation`, `gov:mappingTarget` | mapping |
+| `gov:mappingSource`, `gov:mappingRelation`, `gov:mappingTarget` | mapping, unmap |
 | `gov:appliedDate` | set when an approval applied the change |
 
 The proposal record is the mapping's provenance (who proposed it, why, who approved it, when). This follows the spirit of SSSOM mapping metadata without needing a separate store. Approved mappings themselves are plain SKOS triples in `VOCAB:MAPPINGS`.
@@ -106,7 +120,10 @@ Stardog runs a multi-operation request in one transaction. Because the status is
 A new **Communities** section in the sidebar:
 - **Groups:** one card per concept scheme with owner (assignable), description, concept count and mapping count; expands to list concepts and definitions.
 - **Shared Terms:** a list of labels used by two or more groups. Selecting one shows the groups' definitions side by side, the mappings between them, and a "Propose mapping" form (source, relation with explanation, target, justification). The selected label is kept in the URL; the unsent form is kept as a draft.
-- **Mappings:** a table of all mappings with origin and status, justification, proposer and reviewer, filterable by status.
+- **Shared Terms** also lists **similar wordings** below the identical labels, with the share of words in common and the two groups involved.
+- **Mappings:**
+  - a table of all mappings with origin and status (approved, asserted, pending, rejected, retired), justification, proposer and reviewer, filterable by status;
+  - approved rows have a "Propose removal" action.
 
 The **Review Queue** "New proposal" form gains the add/modify fields and the mapping type. Cards show the structured change. Resolved cards show "applied".
 
@@ -114,8 +131,7 @@ The **Review Queue** "New proposal" form gains the add/modify fields and the map
 `samples/multi-community-vocabulary.trig` has three groups (Computer Science, Physics, Business Administration), each in its own named graph. Several labels overlap ("orders of magnitude", "model", "validation", "resolution"), each group defines them differently, and one mapping is asserted in the data so asserted and governed mappings can be compared.
 
 ## Out of scope (possible next steps)
-- Removing or superseding an approved mapping (today: propose the replacement, and reject or deprecate in data).
 - Per-user identity in the audit trail (needs per-user Stardog accounts; see README security notes).
-- Fuzzy or semantic matching of labels (today: exact match after normalization). Voicebox or embeddings could suggest candidate mappings later.
+- Semantic matching of definitions. Similar-wording suggestions are lexical (labels only). Voicebox or embeddings could also compare definitions and suggest a relation.
 - Editing language-tagged labels per language.
-- OWL classes as group members (groups are SKOS concept schemes).
+- OWL classes as group members (groups are SKOS concept schemes; OWL ontologies would need a membership convention such as `rdfs:isDefinedBy`).

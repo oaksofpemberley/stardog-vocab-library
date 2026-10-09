@@ -3,7 +3,7 @@ import { useStardog } from '../contexts/StardogContext';
 import { querySparql, getBindings, val, getLocalName } from './sparql';
 import { SCHEMES_QUERY, CONCEPTS_QUERY, MAPPINGS_QUERY } from './ontologyQueries';
 import { fetchProposals } from './governance';
-import { mergeMappings } from './communities';
+import { mergeMappings, findSimilarTerms, pairKey } from './communities';
 
 /**
  * Groups (concept schemes), their concepts, all mappings and governance proposals
@@ -59,9 +59,12 @@ export function useCommunityData() {
       if (!declared) return null;
       return { name: /^[a-z][a-z0-9+.-]*:\/\//i.test(declared) ? getLocalName(declared) : declared, governed: false };
     };
+    const mappings = mergeMappings(state.triples, state.proposals);
+    // Suggestions are a to-do list: pairs that already have any mapping (even pending) are left out
+    const mapped = new Set(mappings.filter(m => m.status !== 'retired' && m.status !== 'rejected').map(m => pairKey(m.source, m.target)));
     return {
-      schemeByUri, conceptByUri, schemeLabel, conceptLabel, ownerOf,
-      mappings: mergeMappings(state.triples, state.proposals),
+      schemeByUri, conceptByUri, schemeLabel, conceptLabel, ownerOf, mappings,
+      similar: findSimilarTerms(state.concepts, { exclude: mapped }),
     };
   }, [state, getTermSteward]);
 

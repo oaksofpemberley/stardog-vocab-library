@@ -1,6 +1,6 @@
 # Sample: three groups, each with its own SKOS vocabulary in its own named graph.
-# Several labels overlap but mean different things in each group, which is the case
-# the Communities > Shared Terms view is built for.
+# Several labels overlap but mean different things in each group, and a few are worded
+# differently but closely related, which is what the Communities > Shared Terms view is built for.
 #
 # Load into a Stardog database, e.g.:
 #   stardog data add <db> samples/multi-community-vocabulary.trig
@@ -92,4 +92,14 @@
   biz:Throughput a skos:Concept ; skos:inScheme biz:Scheme ;
     skos:prefLabel "throughput"@en ;
     skos:definition "The rate at which a process generates revenue or completed deliverables."@en .
+
+  # Near matches (worded differently from the other groups' terms): listed as "similar wording"
+  biz:RoughOrderOfMagnitude a skos:Concept ; skos:inScheme biz:Scheme ;
+    skos:prefLabel "rough order of magnitude"@en ;
+    skos:altLabel "ROM"@en ;
+    skos:definition "An early cost estimate expected to be accurate to within about -25% to +75%, used before requirements are firm."@en .
+
+  biz:ForecastUncertainty a skos:Concept ; skos:inScheme biz:Scheme ;
+    skos:prefLabel "forecast uncertainty"@en ;
+    skos:definition "The range within which a planned figure (cost, revenue, schedule) is expected to fall."@en .
 }
