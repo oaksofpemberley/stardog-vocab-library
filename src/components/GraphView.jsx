@@ -42,7 +42,11 @@ export default function GraphView() {
     }));
   }, [nsColorMap]);
 
-  const { nodes, links } = useMemo(() => {
+  // The force simulation stalls the page past a few thousand nodes (50,000 terms: 1.3 s freezes),
+  // and such a picture is unreadable anyway. Draw the best-connected classes up to this cap.
+  const MAX_NODES = 1000;
+
+  const { nodes, links, hiddenCount } = useMemo(() => {
     const filteredClasses = showDeprecated
       ? classes
       : classes.filter(c => !['Deprecated', 'Retired'].includes(getTermStatus(c.uri)));
@@ -66,7 +70,16 @@ export default function GraphView() {
         }
       }
     }
-    return { nodes, links };
+    if (nodes.length <= MAX_NODES) return { nodes, links, hiddenCount: 0 };
+    const degree = new Map();
+    for (const l of links) for (const id of [l.source, l.target]) degree.set(id, (degree.get(id) || 0) + 1);
+    const kept = [...nodes].sort((a, b) => (degree.get(b.id) || 0) - (degree.get(a.id) || 0)).slice(0, MAX_NODES);
+    const keptIds = new Set(kept.map(n => n.id));
+    return {
+      nodes: kept,
+      links: links.filter(l => keptIds.has(l.source) && keptIds.has(l.target)),
+      hiddenCount: nodes.length - kept.length,
+    };
   }, [classes, properties, getTermStatus, showDeprecated]);
 
   useEffect(() => {
@@ -199,6 +212,11 @@ export default function GraphView() {
 
   return (
     <div style={{ height: '100%', position: 'relative' }} ref={containerRef}>
+      {hiddenCount > 0 && (
+        <div className="list-cap-note" style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, maxWidth: 420 }}>
+          Showing the {MAX_NODES.toLocaleString()} best-connected classes; {hiddenCount.toLocaleString()} more are not drawn. Use the Explorer to find any term.
+        </div>
+      )}
       <div style={{
         position: 'absolute', top: 12, right: 12, zIndex: 10,
         display: 'flex', flexDirection: 'column', gap: 4,

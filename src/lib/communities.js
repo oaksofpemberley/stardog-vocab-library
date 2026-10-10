@@ -129,11 +129,18 @@ export const pairKey = (a, b) => [a, b].sort().join('|');
 /**
  * Candidate mappings: concepts in different groups whose labels share most of their words
  * but are not identical (identical labels are already listed as shared terms).
- * Only pairs sharing at least one word are compared, so this stays fast on large vocabularies.
+ *
+ * Scales to large vocabularies: candidates come only from words used by at most `maxWordUse`
+ * concepts. A word like "data" or "system" that appears in thousands of labels says little about
+ * similarity, and pairing everything that shares it would be quadratic (it ran out of memory at
+ * ~20,000 concepts). Such words still count in the score of pairs found through rarer words.
+ * At most `limit` suggestions are returned, best first.
  * @param exclude Set of pairKey()s to skip (e.g. pairs that already have a mapping)
  * @returns {{key, score, a, b, labelA, labelB}[]} best first
  */
-export function findSimilarTerms(concepts, { threshold = 0.5, exclude = new Set() } = {}) {
+export const SIMILAR_LIMIT = 300;
+
+export function findSimilarTerms(concepts, { threshold = 0.5, exclude = new Set(), maxWordUse = 50, limit = SIMILAR_LIMIT } = {}) {
   const prepared = concepts.map(c => ({
     c,
     labels: [c.prefLabel, ...(c.altLabels || [])].filter(Boolean)
@@ -149,6 +156,7 @@ export function findSimilarTerms(concepts, { threshold = 0.5, exclude = new Set(
 
   const results = new Map();
   for (const indices of byToken.values()) {
+    if (indices.size > maxWordUse) continue; // too common to suggest anything
     const list = [...indices];
     for (let x = 0; x < list.length; x++) {
       for (let y = x + 1; y < list.length; y++) {
@@ -167,5 +175,6 @@ export function findSimilarTerms(concepts, { threshold = 0.5, exclude = new Set(
     }
   }
   return [...results.values()].filter(Boolean)
-    .sort((p, q) => q.score - p.score || p.labelA.localeCompare(q.labelA));
+    .sort((p, q) => q.score - p.score || p.labelA.localeCompare(q.labelA))
+    .slice(0, limit);
 }

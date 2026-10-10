@@ -181,3 +181,25 @@ describe('mapping retirement', () => {
     expect(del('rejected')).toHaveLength(0);
   });
 });
+
+describe('findSimilarTerms at scale', () => {
+  it('stays bounded when one word is used by thousands of terms', () => {
+    // 20,000 concepts that all share the word "system": pairing them all would be ~200M pairs
+    const many = Array.from({ length: 20000 }, (_, i) => concept(`urn:c:${i}`, `urn:s:${i % 10}`, `system ${i}`));
+    many.push(concept('urn:x:1', 'urn:s:1', 'rare widget'), concept('urn:x:2', 'urn:s:2', 'rare widget assembly'));
+    const start = performance.now();
+    const pairs = findSimilarTerms(many);
+    expect(performance.now() - start).toBeLessThan(2000);
+    expect(pairs.map(p => pairKey(p.a.uri, p.b.uri))).toContain(pairKey('urn:x:1', 'urn:x:2'));
+  });
+  it('returns at most `limit` suggestions, best first', () => {
+    // 200 pairs across two groups: "alphaK betaK deltaK" vs "alphaK betaK" (2 of 3 words in common)
+    const many = Array.from({ length: 400 }, (_, i) => {
+      const k = Math.floor(i / 2);
+      return concept(`urn:c:${i}`, `urn:s:${i % 2}`, i % 2 ? `alpha${k} beta${k}` : `alpha${k} beta${k} delta${k}`);
+    });
+    const pairs = findSimilarTerms(many, { limit: 25 });
+    expect(pairs).toHaveLength(25);
+    expect(pairs.every((p, i) => i === 0 || pairs[i - 1].score >= p.score)).toBe(true);
+  });
+});

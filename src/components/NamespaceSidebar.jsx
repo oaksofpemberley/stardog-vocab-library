@@ -12,6 +12,10 @@ function nsLabel(ns) {
 }
 
 
+// Drawing tens of thousands of rows makes every keystroke slow (50,000 terms: ~1.3 s per keystroke).
+// The list shows at most this many; search and filters still cover every term.
+const MAX_LISTED = 1500;
+
 export default function NamespaceSidebar({ terms, selectedUri, onSelect, statusFilter }) {
   const { instanceCounts, getTermStatus } = useStardog();
   const [collapsed, setCollapsed] = useState({});
@@ -40,14 +44,34 @@ export default function NamespaceSidebar({ terms, selectedUri, onSelect, statusF
     return map;
   }, [grouped, statusFilter, getTermStatus]);
 
+  // Cap what is drawn, namespace by namespace, in list order
+  const { visible, hiddenCount } = useMemo(() => {
+    let budget = MAX_LISTED, hidden = 0;
+    const out = {};
+    for (const [ns, group] of Object.entries(filteredGrouped)) {
+      const classes = group.classes.slice(0, Math.max(budget, 0));
+      budget -= classes.length;
+      const properties = group.properties.slice(0, Math.max(budget, 0));
+      budget -= properties.length;
+      hidden += group.classes.length - classes.length + group.properties.length - properties.length;
+      out[ns] = { classes, properties, total: group.classes.length + group.properties.length };
+    }
+    return { visible: out, hiddenCount: hidden };
+  }, [filteredGrouped]);
+
   const toggle = (ns) => setCollapsed(p => ({ ...p, [ns]: !p[ns] }));
 
   return (
     <div style={{ padding: '8px 0' }}>
-      {Object.entries(filteredGrouped).map(([ns, group]) => {
+      {hiddenCount > 0 && (
+        <div className="list-cap-note">
+          Showing the first {MAX_LISTED.toLocaleString()} terms; {hiddenCount.toLocaleString()} more. Type in the search box to narrow the list.
+        </div>
+      )}
+      {Object.entries(visible).map(([ns, group]) => {
         const label = nsLabel(ns);
         const isOpen = !collapsed[ns];
-        const total = group.classes.length + group.properties.length;
+        const total = group.total;
 
         return (
           <div key={ns} style={{ marginBottom: 4 }}>

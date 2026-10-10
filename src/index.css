@@ -656,3 +656,4 @@ body {
   .help-nav { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 45vh; }
   .help-article { padding: 20px 16px 40px; }
 }
+.list-cap-note { margin: 4px 12px 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--info-bg); color: var(--info); font-size: 0.75rem; }

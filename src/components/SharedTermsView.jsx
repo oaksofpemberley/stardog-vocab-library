@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { toPrefixed } from '../lib/sparql';
-import { findSharedTerms } from '../lib/communities';
+import { findSharedTerms, SIMILAR_LIMIT } from '../lib/communities';
 import { useCommunityData } from '../lib/useCommunityData';
 import { readHash, updateHash } from '../lib/urlState';
 import { MappingStatusBadge, RelationTag, ConceptName, ProposeMappingForm } from './CommunityParts';
@@ -45,7 +45,7 @@ export default function SharedTermsView() {
         ))}
         {similar.length > 0 && (
           <div className="shared-list-head" style={{ marginTop: 12 }}>
-            <strong>{similar.length}</strong> similar wordings, not yet mapped
+            {similar.length >= SIMILAR_LIMIT ? <>Top <strong>{SIMILAR_LIMIT}</strong></> : <strong>{similar.length}</strong>} similar wordings, not yet mapped
           </div>
         )}
         {similar.map(s => (
@@ -74,7 +74,13 @@ export default function SharedTermsView() {
   );
 }
 
+// A label used by very many terms (e.g. one common word in a 20,000-term vocabulary) would draw
+// thousands of cards and form options (~30 s); side by side only makes sense for a handful.
+const MAX_COMPARED = 12;
+
 function SharedTermDetail({ term, data }) {
+  const shown = term.concepts.slice(0, MAX_COMPARED);
+  const notShown = term.concepts.length - shown.length;
   const uris = new Set(term.concepts.map(c => c.uri));
   const between = data.mappings.filter(m => uris.has(m.source) && uris.has(m.target));
 
@@ -87,8 +93,14 @@ function SharedTermDetail({ term, data }) {
           : `Used by ${term.schemes.length} groups with different meanings. Mappings record how the meanings relate without merging them.`}
       </p>
 
+      {notShown > 0 && (
+        <div className="list-cap-note" style={{ margin: '0 0 12px' }}>
+          This label is used by {term.concepts.length.toLocaleString()} terms. Showing {MAX_COMPARED}; {notShown.toLocaleString()} more
+          are not shown. A label this common is usually too generic to map as one meaning.
+        </div>
+      )}
       <div className="compare-grid">
-        {term.concepts.map(c => {
+        {shown.map(c => {
           const owner = data.ownerOf(c.scheme);
           return (
             <div key={`${c.uri}|${c.scheme}`} className="card compare-card">
@@ -111,7 +123,7 @@ function SharedTermDetail({ term, data }) {
           <p className="muted" style={{ fontSize: '0.85rem' }}>None yet. Propose one below.</p>
         ) : (
           <div className="mapping-rows">
-            {between.map((m, i) => (
+            {between.slice(0, 50).map((m, i) => (
               <div key={i} className="mapping-row">
                 <ConceptName uri={m.source} data={data} />
                 <RelationTag iri={m.relation} />
@@ -124,7 +136,7 @@ function SharedTermDetail({ term, data }) {
         )}
       </div>
 
-      <ProposeMappingForm concepts={term.concepts} data={data} draftKey={term.key} onProposed={data.reload} />
+      <ProposeMappingForm concepts={shown} data={data} draftKey={term.key} onProposed={data.reload} />
     </div>
   );
 }

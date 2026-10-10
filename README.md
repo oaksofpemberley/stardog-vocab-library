@@ -153,7 +153,7 @@ Then put the `vocab_app` lines from `demo-accounts.local` in `.env`, restart `np
 
 ### Stardog's audit log: who really wrote what
 
-The audit entries this app writes are a record, not proof. Stardog's server audit log is proof. Stardog writes it, every entry carries the authenticated account, and neither the app nor database write access can change it. To turn it on, add this to `$STARDOG_HOME/stardog.properties` and restart Stardog:
+The audit entries this app writes are a record kept by the app. Stardog's server audit log is an independent record: Stardog writes it, every entry carries the authenticated account, and neither the app nor database write access can change it (anyone with access to the server's files could). To turn it on, add this to `$STARDOG_HOME/stardog.properties` and restart Stardog:
 
 ```properties
 logging.audit.enabled = true
@@ -181,6 +181,23 @@ Each change then appears as a `Query` event carrying the full SPARQL update and 
 - All values written to Stardog are escaped (`sparqlString`) and IRIs are validated (`sparqlIri`) in `src/lib/sparql.js`. Never build SPARQL by inserting raw text.
 - CSV exports neutralise spreadsheet formulas (cells starting with `=`, `+`, `-`, `@`).
 - Fonts are bundled with the app (no third-party requests), so it also works offline or air-gapped.
+
+## How big a vocabulary it handles
+
+Graph size (instance data) hardly matters: only the per-class instance counts read it, and on 5.8 million triples every query the app runs on connect finished in under 0.3 s. That count runs in the background with a 30-second limit; if it times out, the app just shows no counts. What grows with size is the **vocabulary** (classes, properties and SKOS concepts), because the app loads every term into the browser. Measured on a laptop with generated SKOS vocabularies (10 groups, realistic word frequencies):
+
+| Terms | Load on connect | Explorer search (per keystroke) | Shared / similar terms (browser) | Browser memory |
+|------:|---------------:|--------------------------------:|---------------------------------:|---------------:|
+| 5,000 | ~1 s | fast | 13 ms / 32 ms | ~40 MB |
+| 20,000 | ~1–2 s | 0.18 s | 25 ms / 77 ms | ~105 MB |
+| 50,000 | ~2–3 s | 0.23 s | 48 ms / 173 ms | ~230 MB |
+
+To stay responsive at that size, some views draw a capped number of items and say so:
+- **Explorer:** lists the first 1,500 terms (search and filters still cover all of them).
+- **Graph View:** draws the 1,000 best-connected classes.
+- **Shared Terms:** compares up to 12 terms per label and lists the top 300 similar wordings. Words used by more than 50 terms are not used to suggest pairs.
+
+Comfortable range: up to roughly 50,000 terms per database. Beyond that, initial load and browser memory grow linearly. A vocabulary in the hundreds of thousands of terms would need server-side paging, which the app does not do.
 
 ## Development
 
