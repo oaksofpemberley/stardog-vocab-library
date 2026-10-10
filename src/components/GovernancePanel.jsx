@@ -79,8 +79,9 @@ export default function GovernancePanel({ termUri, termLabel }) {
       {saveError && (
         <div className="connection-status error" role="alert">{saveError}</div>
       )}
-      {/* Status Section */}
-      <div className="card">
+      {/* Status Section (raised: each .card's backdrop-filter is its own stacking context, so the
+          next card would otherwise cover the status menu) */}
+      <div className="card" style={{ position: 'relative', zIndex: 2 }}>
         <div className="card-header">
           <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Shield size={15} color="var(--accent)" /> Lifecycle Status
