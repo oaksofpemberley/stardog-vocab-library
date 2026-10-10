@@ -67,6 +67,7 @@ describe('help content', () => {
     expect(top('quick start')).toContain('quick-start');
     expect(top('stardog refused')).toContain('secured-demo');
     expect(top('server audit log')).toContain('audit-log');
+    expect(top('how many terms')).toContain('scale');
   });
 
   it('only links to pages that exist', () => {
