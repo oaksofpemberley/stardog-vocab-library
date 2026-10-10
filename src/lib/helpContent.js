@@ -634,7 +634,7 @@ export const HELP_ARTICLES = [
         ['Shared Terms', '12 terms per label, 50 mappings, top 300 similar wordings', 'Notes say what was left out. Very common words don\'t trigger suggestions.'],
         ['Instance counts', '100 most-used types, 30-second limit', 'If counting times out, no counts are shown; everything else works.'],
       ] },
-      { type: 'story', title: 'Story: the 40,000-concept thesaurus', text: 'A library team loads a 40,000-concept thesaurus. The app connects in about two seconds. The Explorer shows the first 1,500 concepts and a note; the team types `aircraft` and gets every match across all 40,000. Shared Terms flags one label used by 300 concepts as too generic to compare, which is exactly the conversation the team needed to have.' },
+      { type: 'story', title: 'Story: the 40,000-concept thesaurus', text: 'A library team loads a 40,000-concept thesaurus. The app connects in about two seconds. The Explorer shows the first 1,500 concepts and a note; the team types `bridge` and gets every match across all 40,000. Shared Terms flags one label used by 300 concepts as too generic to compare, which is exactly the conversation the team needed to have.' },
       { type: 'cannot', items: [
         'Handle hundreds of thousands of terms in one database comfortably. That needs server-side paging, which the app does not do.',
         'Show every term or every class in a single list or picture.',
