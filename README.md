@@ -24,7 +24,7 @@ A modern, browser-based vocabulary governance tool for browsing, managing, and a
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 20.19+ (required by Vite 8)
-- A running [Stardog](https://www.stardog.com/) instance with at least one database containing an OWL/RDFS ontology
+- A running [Stardog](https://www.stardog.com/) instance with at least one database containing an OWL ontology or SKOS vocabulary (terms typed only as `rdfs:Class` are not listed)
 
 ### Setup
 
@@ -105,7 +105,7 @@ What the browser keeps across a refresh:
 |------|-------|------------------|-----------------------------|
 | Database, page, selected term, tab, search, filter | URL hash (`#db=…&view=…&term=…`) | Yes | Yes (it is in the URL) |
 | Being connected | `localStorage` flag, cleared by **Disconnect** | Yes, reconnects automatically | No |
-| Endpoint and your name | `localStorage` | Yes | No |
+| Endpoint and your name | `localStorage`, cleared by **Disconnect** | Yes | No |
 | Bearer token | `sessionStorage` | Yes | No (also cleared when the tab closes) |
 | Unsent text (notes, steward, proposal form, review comment) | `localStorage` drafts, per database and term | Yes | No |
 

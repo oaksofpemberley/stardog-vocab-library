@@ -7,7 +7,7 @@
 #   stardog data add -g tag:stardog:api:context:schema <db> samples/voicebox-schema.ttl
 #
 # Properties are connected to classes with schema:domainIncludes / schema:rangeIncludes
-# (Voicebox uses them to write its queries). schema:domainIncludes/schema:rangeIncludes are avoided on purpose:
+# (Voicebox uses them to write its queries). rdfs:domain/rdfs:range are avoided on purpose:
 # Voicebox asks with reasoning on, and they would retype data (e.g. make every group a Concept).
 # The mapping properties are declared symmetric / inverse as in the SKOS standard, so with
 # reasoning a mapping can be found from either end.

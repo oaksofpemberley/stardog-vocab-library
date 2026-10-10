@@ -58,7 +58,7 @@ export const HELP_ARTICLES = [
       { type: 'h', text: '4. Compare meanings across groups (3 minutes)' },
       { type: 'steps', items: [
         'Open **Communities → Shared Terms**. The left list shows labels used by more than one group.',
-        'Select **orders of magnitude**. The three groups\' definitions appear side by side, with each group\'s owner. Under the definitions you will see one mapping marked **asserted**: Physics already states in its own data that its term is related to the Computer Science one.',
+        'Select **orders of magnitude**. The three groups\' definitions appear side by side, each with its group\'s owner if it has one (in the sample only Physics does, declared in its data). Under the definitions you will see one mapping marked **asserted**: Physics already states in its own data that its term is related to the Computer Science one.',
         'Scroll the left list to **similar wordings**: the app noticed that Business Administration says "rough order of magnitude", which is close to the others.',
       ] },
       { type: 'goto', view: 'shared', label: 'Open Shared Terms' },
@@ -150,7 +150,7 @@ export const HELP_ARTICLES = [
         ['Stardog Endpoint', '`/stardog` (the app\'s built-in proxy, the usual choice) or a full Stardog address.'],
         ['Database', 'Pick from the list. If the server will not list databases for your account, type the name instead.'],
         ['Sign in as a Stardog user (optional)', 'Your own Stardog username and password. The password is exchanged once for a Stardog-issued token and never stored; the token is kept until the tab closes.'],
-        ['Bearer Token', 'Only for Stardog Cloud or when you were given a token. Leave empty when the proxy signs in for you.'],
+        ['Or paste a Bearer token (optional)', 'Only for Stardog Cloud or when you were given a token. Leave empty when the proxy signs in for you.'],
         ['Your Name', 'Your name or email. It is recorded as the author of every status change, note, proposal and review.'],
       ] },
       { type: 'p', text: '**Connecting is read-only.** The app only starts writing (to `VOCAB:GOVERNANCE`) when you take the first governance action in that database.' },
@@ -181,7 +181,7 @@ export const HELP_ARTICLES = [
       { type: 'p', text: 'The Explorer has a search bar on top, the term list on the left (grouped by namespace, then into Classes and Properties) and the selected term on the right.' },
       { type: 'h', text: 'Finding terms' },
       { type: 'list', items: [
-        '**Search** matches a term\'s label, full URI, short name (like `phys:OrdersOfMagnitude`) and description, as you type.',
+        '**Search** matches a term\'s label, full URI, short name (the end of the URI, like `OrdersOfMagnitude`) and description, as you type.',
         '**Status buttons** (All, Active, Draft, Review, Deprecated) narrow the list by lifecycle status. Retired terms show under All.',
         'The coloured dot beside each term is its status; the number beside a class is how many instances it has.',
         'Click a namespace heading to fold it away.',
@@ -201,7 +201,7 @@ export const HELP_ARTICLES = [
       ] },
       { type: 'cannot', items: [
         'List terms typed only as `rdfs:Class` or `rdf:Property`, or annotation properties.',
-        'List terms from standard vocabularies (RDF, RDFS, OWL, XSD, SKOS, Dublin Core, schema.org) or the app\'s own governance terms. They are hidden on purpose, even when loaded (for example in the Voicebox schema graph). A vocabulary you defined inside one of those namespaces, such as your own schema.org extension terms, is hidden too.',
+        'List terms from standard vocabularies (RDF, RDFS, OWL, XSD, SKOS, Dublin Core terms at `http://purl.org/dc/terms/`, and schema.org at `https://schema.org/`) or the app\'s own governance terms. Dublin Core elements (`dc/elements/1.1/`) and `http://schema.org/` are still listed. They are hidden on purpose, even when loaded (for example in the Voicebox schema graph). A vocabulary you defined inside one of those namespaces, such as your own schema.org extension terms, is hidden too.',
         'Edit a term directly. Changes go through a proposal in the Review Queue.',
         'Show the class hierarchy (subclasses) or reasoning results. The app reads asserted data only.',
         'Show instance counts for every class on very large databases: counts are loaded for the 100 most-used types, and none are shown if counting takes more than 30 seconds.',
@@ -220,8 +220,8 @@ export const HELP_ARTICLES = [
     body: [
       { type: 'p', text: 'Both views draw **classes as nodes** and draw an arrow from class A to class B when an **object property** has A as its domain and B as its range. A ring or border in the status colour shows each class\'s lifecycle status.' },
       { type: 'table', head: ['', 'Graph View', 'Designer View'], rows: [
-        ['Layout', 'Force-directed; drag nodes to arrange them', 'Layered from top to bottom, computed for you'],
-        ['Colours', 'One colour per namespace (legend at the side)', 'One colour per class; badge shows property count'],
+        ['Layout', 'Force-directed; drag a node to pull the layout around (it settles back when you let go)', 'Layered from top to bottom, computed for you'],
+        ['Colours', 'One colour per namespace (collapsible legend, bottom left)', 'One colour per class; badge shows property count'],
         ['Extras', 'Hide or show deprecated and retired classes', 'Click a class to see its details'],
         ['Navigation', 'Scroll to zoom, drag the background to pan', 'Scroll to zoom, drag the background to pan'],
       ] },
@@ -231,7 +231,7 @@ export const HELP_ARTICLES = [
         'Show SKOS concepts linked by `skos:broader` or mappings. A SKOS-only database looks like unconnected dots; use Groups and Shared Terms instead.',
         'Show subclass (`rdfs:subClassOf`) links or datatype properties as edges.',
         'Save a layout or export the picture.',
-        'Draw more than 1,000 classes. Graph View then draws the 1,000 best-connected ones and says how many it left out; use the Explorer to find the rest.',
+        'Draw more than 1,000 classes in Graph View (Designer View draws them all). Graph View then draws the 1,000 best-connected ones and says how many it left out; use the Explorer to find the rest.',
       ] },
       { type: 'goto', view: 'graph', label: 'Open Graph View' },
       { type: 'goto', view: 'designer', label: 'Open Designer View' },
@@ -247,10 +247,10 @@ export const HELP_ARTICLES = [
     keywords: ['community', 'concept scheme', 'owner', 'team', 'skos', 'assign owner', 'dct:creator'],
     related: ['shared-terms', 'mappings', 'concepts'],
     body: [
-      { type: 'p', text: 'Every `skos:ConceptScheme` in the database becomes a card on the Groups page with its label, description, number of concepts and number of mappings that involve it. **Show concepts** lists every concept with its definition and alternative labels.' },
+      { type: 'p', text: 'Every `skos:ConceptScheme` in the database becomes a card on the Groups page with its label, description, number of concepts and number of mappings that involve it (every status, including pending, rejected and retired). **Show concepts** lists every concept with its definition and alternative labels.' },
       { type: 'h', text: 'Owners' },
       { type: 'list', items: [
-        'Type a name or team in the owner box, or choose owner type **Stardog account** and type the account name (suggestions appear where your account may list users; most accounts can only see themselves), then click **Assign**. This takes effect immediately (no review) and is written to the audit log.',
+        'Pick the owner type first. It starts on **Stardog account**: type the account name (suggestions appear where your account may list users; most accounts can only see themselves). To record a person or team that is not a Stardog account, switch it to **Name**. Then click **Assign**. This takes effect immediately (no review) and is written to the audit log.',
         'Assigning again replaces the previous owner. While "Require group owners to approve" is on, only the current owner\'s Stardog account can hand a group to a new owner; everyone else sees "Only <account> can hand this group to a new owner". Groups owned by a typed name, or with no owner, can still be reassigned by anyone.',
         'Only owners that are **Stardog accounts** can be required to approve changes (see below). A typed name is for information only.',
         'If nobody has been assigned but the data names a `dct:creator` or `dct:publisher`, that is shown as the owner, marked "(declared in data)".',
@@ -281,7 +281,7 @@ export const HELP_ARTICLES = [
     related: ['mappings', 'groups', 'review-queue'],
     body: [
       { type: 'p', text: 'The top of the left list shows **labels used by more than one group**. A label counts as shared when concepts in different groups have the same preferred or alternative label, ignoring capitals and extra spaces.' },
-      { type: 'p', text: 'Below it, **similar wordings** lists pairs of concepts in different groups whose labels share at least half of their meaningful words (small words like "of" and plural endings are ignored). The percentage is the share of words in common. Pairs that already have a mapping (asserted, approved or pending) are left out, so this list is a to-do list that shrinks as you work.' },
+      { type: 'p', text: 'Below it, **similar wordings** lists pairs of concepts in different groups whose labels are at least 50% alike: the words they share, divided by all the different words in both labels. Small words like "of" are ignored, and plurals ending in "s" or "ies" count as the singular. The percentage is that score. Pairs that already have a mapping (asserted, approved or pending) are left out, so this list is a to-do list that shrinks as you work.' },
       { type: 'p', text: 'Selecting an item shows each group\'s concept side by side (group, owner, label, other labels, definition), any mappings already between them, and a form to propose one.' },
       { type: 'story', title: 'Story: "orders of magnitude"', text: 'In the sample, three groups say "orders of magnitude". **Computer Science** means differences in growth rate between complexity classes. **Physics** means powers of ten in a measured quantity. **Business Administration** means a rough sense of scale in a forecast, and also writes "rough order of magnitude", which appears under similar wordings at about 67%. Forcing one definition would make two teams wrong. Physics already states in its own data that its term is a **related match** of the CS one. The stewards add, through review, a related match from Business to Physics, with a justification that says where the meanings part ways. Each team keeps its words, and the relationships are now on record.' },
       { type: 'can', items: [
@@ -293,7 +293,7 @@ export const HELP_ARTICLES = [
         'Suggest which relation to use. People decide that.',
         'Find overlaps inside one group, or for OWL classes.',
         'Dismiss a suggestion you don\'t want to map. It stays in the list until a mapping exists for the pair.',
-        'Compare more than 12 terms for one label, or list more than 50 mappings between them. A label used that widely is usually too generic to map as one meaning.',
+        'Compare more than 12 terms for one label (a note says how many more; a label used that widely is usually too generic to map as one meaning), or list more than 50 mappings between them (the rest are not shown, without a note).',
         'List more than the top 300 similar wordings (the heading then says "Top 300"). Words used by more than 50 terms don\'t trigger suggestions on their own, though they still count toward a pair\'s score.',
       ] },
       { type: 'goto', view: 'shared', label: 'Open Shared Terms' },
@@ -400,20 +400,20 @@ export const HELP_ARTICLES = [
       { type: 'steps', items: [
         'Each pending card shows what approving will change, the description and who proposed it.',
         'Click **Review**, write a comment (required to reject, optional to approve), and click **Approve** or **Reject**.',
-        'If owner approval is required, the card shows **Needs approval from** with one chip per owner (for example "Physics: alice ✓ approved", "Business Administration: biz_owner (waiting)"). Only those accounts get a Review button; others see "Only X and Y can review this", and anyone not signed in sees "Sign in with a Stardog account to review". An owner who has approved waits for the others; the change applies when the last one approves.',
+        'If owner approval is required, the card shows **Needs approval from** with one chip per owner (for example "Physics: alice ✓ approved", "Business Administration: biz_owner (waiting)"). Only those accounts get a Review button. Everyone else, including the shared account when you have not signed in, sees "Only X and Y can review this". "Sign in with a Stardog account to review" appears only when the app cannot tell which account is in use. An owner who has approved waits for the others; the change applies when the last one approves.',
         'Resolved proposals move to **Resolved**. An "applied" badge means the change was written to the vocabulary.',
       ] },
       { type: 'story', title: 'Story: a rename that went through review', text: 'The reporting team asks for "Shipment" to be relabelled "Outbound Shipment". Sam opens a **Modify term** proposal with the new label and the reason. Priya, the steward, checks Impact, approves with the comment "No downstream label matching, safe". The label changes in Stardog at that moment, the Explorer reloads, and the Audit Log shows both Sam\'s proposal and Priya\'s approval.' },
       { type: 'story', title: 'Story: two owners, one mapping', text: 'With "Require group owners to approve" on, Ravi (owner of Physics, signed in with their Stardog account) and Dana (owner of Business Administration) both have to approve the mapping between their "orders of magnitude" terms. Ravi approves first; the card now waits for Dana. When Dana approves, the mapping is written. If either had rejected it, it would have closed.' },
       { type: 'tip', text: 'Approving twice is safe. If two people approve the same proposal at once, only the first approval applies the change.' },
       { type: 'can', items: [
-        'Add SKOS concepts to a group, change labels and definitions of any listed term, deprecate terms, and add or remove mappings.',
+        'Add SKOS concepts to a group, change labels and definitions of classes, concepts and concept schemes, deprecate them, and add or remove mappings.',
         'Keep a half-written proposal or review comment across a page refresh.',
       ] },
       { type: 'cannot', items: [
         'Restrict approval beyond group owners on its own. Unless "Require group owners to approve" is on (Groups page) and the affected group has a Stardog-account owner, anyone using the app can approve or reject, including their own proposal. On a database with named-graph security, Stardog still refuses an approval whose change the account may not write (see "Secured demo").',
         'Delete a term, change its IRI, or move it to another group.',
-        'Add OWL classes or properties, or edit domains, ranges, hierarchy or SHACL shapes.',
+        'Add OWL classes or properties, change or deprecate a property, or edit domains, ranges, hierarchy or SHACL shapes.',
         'Undo an approval automatically. Propose the reverse change instead.',
         'Edit or withdraw a proposal after it is submitted. Reject it and submit a new one.',
         'Edit labels per language. New labels and definitions are written without a language tag.',
@@ -453,7 +453,7 @@ export const HELP_ARTICLES = [
     related: ['governance', 'review-queue', 'security'],
     body: [
       { type: 'p', text: 'Each entry shows the name the person typed and, as a tag, the **Stardog account the app was signed in as**. Stardog confirms that account at sign-in, but the app writes the tag, so it is not tamper-proof. Without a personal sign-in, the tag is the app\'s shared account.' },
-      { type: 'p', text: 'The Audit Log lists every status change, steward or owner assignment, note, proposal and review in this database. Use the drop-down to show one kind of action. Each term\'s Governance tab shows its own recent entries.' },
+      { type: 'p', text: 'The Audit Log lists the newest 200 governance actions in this database: status changes, steward and owner assignments, notes, proposals and reviews. Use the drop-down to show one kind of action. Each term\'s Governance tab shows its own recent entries.' },
       { type: 'story', title: 'Story: answering an auditor', text: 'An auditor asks when "Customer" was deprecated and on whose authority. The Audit Log shows the Deprecate proposal by Sam on 3 March, approved by Priya on 5 March with the comment "Replaced by Party". Screenshot, done.' },
       { type: 'h', text: 'Stardog\'s server audit log: the independent record' },
       { type: 'p', text: 'Separately from this page, Stardog can keep its own **server audit log**. It is enabled in this local setup: `logging.audit.enabled = true` (JSON, rotated at 100 MB) in `stardog.properties`, which takes effect after a server restart. Other deployments must turn it on themselves.' },
@@ -484,13 +484,13 @@ export const HELP_ARTICLES = [
     body: [
       { type: 'table', head: ['Measure', 'How it is worked out'], rows: [
         ['Classes, Properties', 'Number of terms the Explorer lists.'],
-        ['SHACL Shapes', 'Node shapes that target a class.'],
+        ['SHACL Shapes', 'SHACL constraints: one per property a shape constrains (a shape with 4 properties counts 4), plus shapes that only target a class.'],
         ['Named Graphs', 'Named graphs found in the database (up to 50).'],
         ['Stewardship', 'Share of terms with a steward assigned.'],
         ['SHACL Coverage', 'Share of classes targeted by at least one SHACL shape.'],
         ['Terms by Lifecycle Status', 'Status mix; terms without a status count as Active.'],
         ['Classes by Namespace', 'Where classes are defined.'],
-        ['Instance Distribution', 'The ten classes with the most instances.'],
+        ['Instance Distribution', 'The ten most-used types (`rdf:type` values) in the database. This can include things that are not your classes, such as `skos:Concept`, `owl:ObjectProperty` or the app\'s own audit entries.'],
       ] },
       { type: 'story', title: 'Story: setting a quarterly goal', text: 'The governance lead sees Stewardship at 18% and SHACL Coverage at 40%. The quarterly goal becomes "every Active class has a steward". Each week, the team filters the Explorer by Active and assigns stewards; the percentage climbs on this page.' },
       { type: 'cannot', items: [
@@ -510,8 +510,8 @@ export const HELP_ARTICLES = [
     related: ['limits', 'data-storage'],
     body: [
       { type: 'table', head: ['Format', 'Contains', 'Good for'], rows: [
-        ['Turtle (.ttl)', 'Classes and properties with type, label, description, domains and ranges.', 'Loading into another RDF tool.'],
-        ['JSON-LD (.jsonld)', 'The same, as JSON.', 'Web developers and APIs.'],
+        ['Turtle (.ttl)', 'Classes and properties with type, label and description (always as `rdfs:label`/`rdfs:comment`, even for SKOS terms), and domains/ranges (always as `schema:domainIncludes`/`schema:rangeIncludes`).', 'Loading into another RDF tool.'],
+        ['JSON-LD (.jsonld)', 'The same, as JSON (same `rdfs:` and `schema:` properties).', 'Web developers and APIs.'],
         ['CSV (.csv)', 'One row per term: URI, label, type, description, lifecycle status, instance count.', 'Spreadsheets and reviews with people who don\'t use RDF.'],
       ] },
       { type: 'story', title: 'Story: a review meeting in a spreadsheet', text: 'Dana exports CSV before the monthly vocabulary review, sorts by status and instance count, and walks the group through every Draft term with real usage. Formulas are neutralised in the file, so a description that starts with "=" can\'t run in Excel.' },
@@ -592,7 +592,7 @@ export const HELP_ARTICLES = [
       ] },
       { type: 'h', text: 'The walkthrough' },
       { type: 'steps', items: [
-        'Without signing in, propose a **close match** between the Physics and Business Administration "orders of magnitude", then try to approve it. Stardog refuses: "Stardog refused this change: the Stardog account in use may not write to …". The proposal stays pending; nothing changed.',
+        'Without signing in (you are the shared `vocab_app` account), propose a **close match** between the Physics and Business Administration "orders of magnitude". Proposing works, but the card says "Only alice and bob can review this": that is the app\'s owner-approval rule. Even with that rule off, `vocab_app` could not apply the change, because Stardog lets it write only `VOCAB:GOVERNANCE` (step 4 shows Stardog refusing).',
         'Disconnect and sign in as **alice**. Approve. The card shows "Physics: alice ✓ approved" and "Business Administration: bob (waiting)". Nothing is written yet.',
         'Disconnect and sign in as **bob**. Approve. Now the mapping is applied and appears as approved on the Mappings page.',
         'Still as bob, turn **Require group owners to approve** off, propose a change to a Physics term, and approve it. Stardog still refuses ("may not write to urn:vocab:physics"); the Physics data is unchanged. Switching the app\'s rule off does not get past Stardog.',
@@ -631,7 +631,7 @@ export const HELP_ARTICLES = [
       { type: 'table', head: ['Page', 'Limit', 'What happens'], rows: [
         ['Vocabulary Explorer', '1,500 terms in the list', 'A note says how many more; search and filters still cover all terms.'],
         ['Graph View', '1,000 classes drawn', 'The best-connected classes are drawn, with a note.'],
-        ['Shared Terms', '12 terms per label, 50 mappings, top 300 similar wordings', 'Notes say what was left out. Very common words don\'t trigger suggestions.'],
+        ['Shared Terms', '12 terms per label, 50 mappings, top 300 similar wordings', 'A note covers the 12-term limit and the heading says "Top 300"; extra mappings are left out without a note. Very common words don\'t trigger suggestions.'],
         ['Instance counts', '100 most-used types, 30-second limit', 'If counting times out, no counts are shown; everything else works.'],
       ] },
       { type: 'story', title: 'Story: the 40,000-concept thesaurus', text: 'A library team loads a 40,000-concept thesaurus. The app connects in about two seconds. The Explorer shows the first 1,500 concepts and a note; the team types `bridge` and gets every match across all 40,000. Shared Terms flags one label used by 300 concepts as too generic to compare, which is exactly the conversation the team needed to have.' },
@@ -656,7 +656,8 @@ export const HELP_ARTICLES = [
         ['Approved term changes (add, modify, deprecate)', 'The term\'s own graph in Stardog', 'Yes, for everyone'],
         ['Your database, page, selected term, tab, search, filter', 'The page address (URL)', 'Yes, and in links you share'],
         ['Unsent notes, proposals, review comments, owner names', 'This browser (drafts)', 'Yes, on this browser'],
-        ['Endpoint, your name, theme', 'This browser', 'Yes, until site data is cleared'],
+        ['Endpoint and your name', 'This browser', 'Yes, until you click Disconnect or clear site data'],
+        ['Theme', 'This browser', 'Yes, until site data is cleared'],
         ['Bearer token', 'This browser tab', 'Until the tab closes'],
       ] },
       { type: 'p', text: 'If a save fails, the app shows why and keeps what you typed. If a save is still running, the browser asks before you leave.' },
@@ -700,8 +701,8 @@ export const HELP_ARTICLES = [
     body: [
       { type: 'h', text: 'The database list is empty' },
       { type: 'p', text: 'Your account may not be allowed to list databases, or the endpoint is wrong. Type the database name by hand, or check the endpoint with whoever set up the app.' },
-      { type: 'h', text: '"Connection failed"' },
-      { type: 'p', text: 'Check the endpoint and database name. For Stardog Cloud, tokens expire after a short time; paste a fresh one.' },
+      { type: 'h', text: 'Connecting fails' },
+      { type: 'p', text: 'The red message is usually Stardog\'s own error, such as "Failed to fetch" (the endpoint cannot be reached) or "SPARQL Query Error (…)". Check the endpoint and database name. For Stardog Cloud, tokens expire after a short time; paste a fresh one.' },
       { type: 'h', text: '"Wrong Stardog username or password."' },
       { type: 'p', text: 'The optional sign-in was refused by Stardog. Check the username and password, or leave both empty to use the shared account.' },
       { type: 'h', text: '"Stardog refused this change: the Stardog account in use may not write to …"' },
@@ -713,7 +714,7 @@ export const HELP_ARTICLES = [
       { type: 'h', text: 'A group owner\'s account is gone and nobody can approve' },
       { type: 'p', text: 'Ask a Stardog administrator to turn owner approval off directly: delete the triple `<http://vocab.gov/ontology#settings> gov:requireOwnerApproval ?v` from the `VOCAB:GOVERNANCE` graph. Then reassign the group\'s owner.' },
       { type: 'h', text: 'The Explorer shows no terms' },
-      { type: 'p', text: 'The database has no `owl:Class`, `skos:Concept`, `skos:ConceptScheme`, `owl:ObjectProperty` or `owl:DatatypeProperty` (terms typed only as `rdfs:Class` are not listed), or all its terms are in a standard namespace that the Explorer hides (RDF, RDFS, OWL, XSD, SKOS, Dublin Core, schema.org). Check you picked the right database.' },
+      { type: 'p', text: 'The database has no `owl:Class`, `skos:Concept`, `skos:ConceptScheme`, `owl:ObjectProperty` or `owl:DatatypeProperty` (terms typed only as `rdfs:Class` are not listed), or all its terms are in a standard namespace that the Explorer hides (RDF, RDFS, OWL, XSD, SKOS, `http://purl.org/dc/terms/`, `https://schema.org/`). Check you picked the right database.' },
       { type: 'h', text: 'Groups and Shared Terms are empty' },
       { type: 'p', text: 'These pages need SKOS concept schemes with concepts linked by `skos:inScheme`. Load `samples/multi-community-vocabulary.trig` to try them.' },
       { type: 'h', text: 'Graph View is just dots, or empty' },
