@@ -188,7 +188,7 @@ Graph size (instance data) hardly matters: only the per-class instance counts re
 
 | Terms | Load on connect | Explorer search (per keystroke) | Shared / similar terms (browser) | Browser memory |
 |------:|---------------:|--------------------------------:|---------------------------------:|---------------:|
-| 5,000 | ~1 s | fast | 13 ms / 32 ms | ~40 MB |
+| 5,000 | ~1 s | not measured | 13 ms / 32 ms | not measured |
 | 20,000 | ~1–2 s | 0.18 s | 25 ms / 77 ms | ~105 MB |
 | 50,000 | ~2–3 s | 0.23 s | 48 ms / 173 ms | ~230 MB |
 
