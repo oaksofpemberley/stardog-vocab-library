@@ -225,7 +225,7 @@ export const HELP_ARTICLES = [
         ['Extras', 'Hide or show deprecated and retired classes', 'Click a class to see its details'],
         ['Navigation', 'Scroll to zoom, drag the background to pan', 'Scroll to zoom, drag the background to pan'],
       ] },
-      { type: 'story', title: 'Story: explaining the model to a new analyst', text: 'Priya opens Designer View in a meeting: Mission at the top, Aircraft and Crew below, Sortie at the bottom. The arrows read like sentences ("Mission hasAircraft Aircraft"). The deprecated LegacyTail class has an orange ring, so nobody builds a report on it.' },
+      { type: 'story', title: 'Story: explaining the model to a new analyst', text: 'Priya opens Designer View in a meeting: Customer at the top, Order and Product below, Shipment at the bottom. The arrows read like sentences ("Order containsProduct Product"). The deprecated LegacySku class has an orange ring, so nobody builds a report on it.' },
       { type: 'cannot', items: [
         'Edit the vocabulary by drawing. The views are read-only.',
         'Show SKOS concepts linked by `skos:broader` or mappings. A SKOS-only database looks like unconnected dots; use Groups and Shared Terms instead.',
@@ -369,7 +369,7 @@ export const HELP_ARTICLES = [
         '**Editorial notes**: short comments for other stewards. The ten newest are shown; all are kept.',
         '**Recent activity**: the last eight audit entries for this term.',
       ] },
-      { type: 'story', title: 'Story: retiring "LegacyTail" without breaking reports', text: 'Priya checks the **Impact** tab of LegacyTail first: 340 instances and two properties point at it. They set it to **Deprecated** (not Retired), add the note "Use Aircraft. Remove after Q3 reporting", and assign the reporting lead as steward. The orange status shows up in the Explorer, Graph View and Analytics, so new work avoids it while old reports keep running.' },
+      { type: 'story', title: 'Story: retiring "LegacySku" without breaking reports', text: 'Priya checks the **Impact** tab of LegacySku first: 340 instances and two properties point at it. They set it to **Deprecated** (not Retired), add the note "Use Product. Remove after Q3 reporting", and assign the reporting lead as steward. The orange status shows up in the Explorer, Graph View and Analytics, so new work avoids it while old reports keep running.' },
       { type: 'h', text: 'Status here vs. a "Deprecate term" proposal' },
       { type: 'p', text: 'Setting the status to Deprecated here only records the status in `VOCAB:GOVERNANCE`. An approved **Deprecate term** proposal from the Review Queue also writes `owl:deprecated true` into the vocabulary itself, so other tools see it too.' },
       { type: 'cannot', items: [
@@ -403,7 +403,7 @@ export const HELP_ARTICLES = [
         'If owner approval is required, the card shows **Needs approval from** with one chip per owner (for example "Physics: alice ✓ approved", "Business Administration: biz_owner (waiting)"). Only those accounts get a Review button; others see "Only X and Y can review this", and anyone not signed in sees "Sign in with a Stardog account to review". An owner who has approved waits for the others; the change applies when the last one approves.',
         'Resolved proposals move to **Resolved**. An "applied" badge means the change was written to the vocabulary.',
       ] },
-      { type: 'story', title: 'Story: a rename that went through review', text: 'The reporting team asks for "Sortie" to be relabelled "Flight Sortie". Sam opens a **Modify term** proposal with the new label and the reason. Priya, the steward, checks Impact, approves with the comment "No downstream label matching, safe". The label changes in Stardog at that moment, the Explorer reloads, and the Audit Log shows both Sam\'s proposal and Priya\'s approval.' },
+      { type: 'story', title: 'Story: a rename that went through review', text: 'The reporting team asks for "Shipment" to be relabelled "Outbound Shipment". Sam opens a **Modify term** proposal with the new label and the reason. Priya, the steward, checks Impact, approves with the comment "No downstream label matching, safe". The label changes in Stardog at that moment, the Explorer reloads, and the Audit Log shows both Sam\'s proposal and Priya\'s approval.' },
       { type: 'story', title: 'Story: two owners, one mapping', text: 'With "Require group owners to approve" on, Ravi (owner of Physics, signed in with their Stardog account) and Dana (owner of Business Administration) both have to approve the mapping between their "orders of magnitude" terms. Ravi approves first; the card now waits for Dana. When Dana approves, the mapping is written. If either had rejected it, it would have closed.' },
       { type: 'tip', text: 'Approving twice is safe. If two people approve the same proposal at once, only the first approval applies the change.' },
       { type: 'can', items: [
