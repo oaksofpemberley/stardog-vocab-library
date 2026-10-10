@@ -622,7 +622,7 @@ export const HELP_ARTICLES = [
       { type: 'p', text: 'The app loads every **term** (class, property, SKOS concept) into your browser, so the number of terms is what matters. The amount of **instance data** hardly does: on local databases of up to 5.8 million triples, every query the app runs when connecting took under 0.3 seconds.' },
       { type: 'h', text: 'Measured on generated SKOS vocabularies (10 groups)' },
       { type: 'table', head: ['Terms', 'Load', 'Browser memory', 'Search per keystroke'], rows: [
-        ['5,000', 'about 1 s', 'about 40 MB', 'not measured'],
+        ['5,000', 'about 1 s', 'not measured', 'not measured'],
         ['20,000', '1 to 2 s', 'about 105 MB', '0.18 s'],
         ['50,000', '2 to 3 s', 'about 230 MB', '0.23 s'],
       ] },
