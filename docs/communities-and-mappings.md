@@ -171,7 +171,8 @@ The **Review Queue** "New proposal" form gains the add/modify fields and the map
 `samples/multi-community-vocabulary.trig` has three groups (Computer Science, Physics, Business Administration), each in its own named graph. Several labels overlap ("orders of magnitude", "model", "validation", "resolution"), each group defines them differently, and one mapping is asserted in the data so asserted and governed mappings can be compared.
 
 ## Out of scope (possible next steps)
-- The "both owners" rule in Stardog itself (it can restrict who writes `VOCAB:MAPPINGS`, not require two parties); Stardog's server audit log (needs a server restart).
+- The "both owners" rule in Stardog itself (it can restrict who writes `VOCAB:MAPPINGS`, not require two parties).
+- An in-app view of Stardog's server audit log (it is enabled locally via `stardog.properties` and verified to record each update with the authenticated account; reading it needs server file access).
 - Semantic matching of definitions. Similar-wording suggestions are lexical (labels only). Voicebox or embeddings could also compare definitions and suggest a relation.
 - Editing language-tagged labels per language.
 - OWL classes as group members (groups are SKOS concept schemes; OWL ontologies would need a membership convention such as `rdfs:isDefinedBy`).

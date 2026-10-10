@@ -149,7 +149,27 @@ Then put the `vocab_app` lines from `demo-accounts.local` in `.env`, restart `np
 - **Limits:**
   - Proposals and reviews must stay writable for everyone who takes part, so `VOCAB:GOVERNANCE` itself is not protected per entry.
   - With named-graph security, new graphs (a new group's vocabulary) need their own grants.
-  - Stardog's own audit log, the tamper-proof record of who wrote what, is a server setting (`stardog.properties`) and needs a server restart. The script does not change it.
+  - Stardog's own audit log is a server setting. The script does not change it; see below.
+
+### Stardog's audit log: who really wrote what
+
+The audit entries this app writes are a record, not proof. Stardog's server audit log is proof. Stardog writes it, every entry carries the authenticated account, and neither the app nor database write access can change it. To turn it on, add this to `$STARDOG_HOME/stardog.properties` and restart Stardog:
+
+```properties
+logging.audit.enabled = true
+logging.audit.type = json
+logging.audit.file = audit.log
+logging.audit.rotation.type = size
+logging.audit.rotation.limit = 104857600
+logging.audit.rotation.file.count = 10
+logging.audit.rotation.compress = true
+```
+
+Each change then appears as a `Query` event carrying the full SPARQL update and `User=<account>`, followed by `TxCommit` (with the number of triples changed) or `TxRollback` (refused or failed). Read it with `stardog-admin log print --json $STARDOG_HOME/audit.log` or any JSON tool. A few things to know:
+
+- It logs every server event, reads included, so it is verbose.
+- It names the Stardog account, so changes made through the shared proxy account appear as `vocab_app`. Sign in personally when attribution matters.
+- Only people with access to the server's files can read it.
 
 ## Security notes
 
