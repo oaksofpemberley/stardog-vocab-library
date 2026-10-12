@@ -1,0 +1,236 @@
+# MBSE demo data for the Vocabulary Governance Library (walkthrough: demos/mbse/README.md).
+#
+# Story: one program, a solar-powered Field Sensor Station (FSS-1), and three engineering groups
+# that use the same words (validation, verification, model, interface, fidelity) to mean different
+# things. A requirement was "verified by analysis" with a simulation model that one group called
+# "validated", and another group heard that word differently.
+#
+# Graphs:
+#   urn:vocab:syseng   Systems Engineering vocabulary (SKOS)
+#   urn:vocab:test     Test & Evaluation vocabulary (SKOS)
+#   urn:vocab:modsim   Modeling & Simulation vocabulary (SKOS)
+#   urn:vocab:thread   the digital-thread model (OWL classes + properties + SHACL shapes)
+#   urn:data:fss1      the FSS-1 program data (instances of the digital-thread classes)
+
+@prefix skos:   <http://www.w3.org/2004/02/skos/core#> .
+@prefix dct:    <http://purl.org/dc/terms/> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix schema: <https://schema.org/> .
+@prefix se:     <http://example.org/mbse/systems-engineering#> .
+@prefix te:     <http://example.org/mbse/test-and-evaluation#> .
+@prefix ms:     <http://example.org/mbse/modeling-and-simulation#> .
+@prefix dt:     <http://example.org/mbse/digital-thread#> .
+@prefix fss:    <http://example.org/mbse/fss1#> .
+
+# ───────────────────────── Systems Engineering ─────────────────────────
+<urn:vocab:syseng> {
+  se:Scheme a skos:ConceptScheme ;
+    skos:prefLabel "Systems Engineering"@en ;
+    skos:definition "Terms as used by the systems engineering team that owns the system model and the requirements."@en ;
+    dct:creator "Systems Engineering Working Group" .
+
+  se:Validation a skos:Concept ; skos:inScheme se:Scheme ;
+    skos:prefLabel "validation"@en ;
+    skos:altLabel "system validation"@en ;
+    skos:definition "Confirming that the finished system meets the users' real needs in its intended environment: did we build the right thing?"@en .
+
+  se:Verification a skos:Concept ; skos:inScheme se:Scheme ;
+    skos:prefLabel "verification"@en ;
+    skos:definition "Confirming that the design meets each written requirement, by test, analysis, inspection or demonstration: did we build the thing right?"@en .
+
+  se:Model a skos:Concept ; skos:inScheme se:Scheme ;
+    skos:prefLabel "model"@en ;
+    skos:altLabel "system model"@en ;
+    skos:definition "The authoritative digital description of the system (for example in SysML): its parts, interfaces, requirements and how they connect."@en .
+
+  se:Interface a skos:Concept ; skos:inScheme se:Scheme ;
+    skos:prefLabel "interface"@en ;
+    skos:definition "A boundary where two parts of the system exchange data, power or force, written down in an interface control document."@en .
+
+  se:Requirement a skos:Concept ; skos:inScheme se:Scheme ;
+    skos:prefLabel "requirement"@en ;
+    skos:definition "A single, testable statement of something the system shall do or be."@en .
+
+  se:TechnicalPerformanceMeasure a skos:Concept ; skos:inScheme se:Scheme ;
+    skos:prefLabel "technical performance measure"@en ;
+    skos:altLabel "TPM"@en ;
+    skos:definition "A key design number tracked over the life of the program to show whether the design is on course, for example battery hours without sun."@en .
+
+  se:Baseline a skos:Concept ; skos:inScheme se:Scheme ;
+    skos:prefLabel "baseline"@en ;
+    skos:definition "An agreed version of the requirements or design that can only be changed through formal review."@en .
+}
+
+# ───────────────────────── Test & Evaluation ─────────────────────────
+<urn:vocab:test> {
+  te:Scheme a skos:ConceptScheme ;
+    skos:prefLabel "Test & Evaluation"@en ;
+    skos:definition "Terms as used by the test team that plans and runs lab and field tests."@en .
+
+  te:Validation a skos:Concept ; skos:inScheme te:Scheme ;
+    skos:prefLabel "validation"@en ;
+    skos:definition "Dry-running a test procedure and its equipment to confirm the procedure can be carried out and the instruments read correctly."@en .
+
+  te:Verification a skos:Concept ; skos:inScheme te:Scheme ;
+    skos:prefLabel "verification"@en ;
+    skos:definition "Running a test and recording a pass or fail against the test's success criteria."@en .
+
+  te:Model a skos:Concept ; skos:inScheme te:Scheme ;
+    skos:prefLabel "model"@en ;
+    skos:altLabel "scale model"@en ;
+    skos:definition "A physical, usually scaled, replica of the hardware built to be tested, for example in a wind tunnel."@en .
+
+  te:Interface a skos:Concept ; skos:inScheme te:Scheme ;
+    skos:prefLabel "interface"@en ;
+    skos:definition "The cables and connectors that join the unit under test to the test equipment."@en .
+
+  te:Fidelity a skos:Concept ; skos:inScheme te:Scheme ;
+    skos:prefLabel "fidelity"@en ;
+    skos:definition "How closely the test setup matches the real operating environment (temperature, wind, sunlight)."@en .
+
+  te:MeasureOfPerformance a skos:Concept ; skos:inScheme te:Scheme ;
+    skos:prefLabel "measure of performance"@en ;
+    skos:altLabel "MOP"@en ;
+    skos:definition "A number measured during a test that shows how well the system performed, for example hours of operation in the dark chamber."@en .
+
+  te:UnitUnderTest a skos:Concept ; skos:inScheme te:Scheme ;
+    skos:prefLabel "unit under test"@en ;
+    skos:altLabel "UUT"@en ;
+    skos:definition "The specific piece of hardware being tested."@en .
+}
+
+# ───────────────────────── Modeling & Simulation ─────────────────────────
+<urn:vocab:modsim> {
+  ms:Scheme a skos:ConceptScheme ;
+    skos:prefLabel "Modeling & Simulation"@en ;
+    skos:definition "Terms as used by the analysts who build and run computer simulations."@en ;
+    dct:creator "Modeling & Simulation Team" .
+
+  ms:Validation a skos:Concept ; skos:inScheme ms:Scheme ;
+    skos:prefLabel "validation"@en ;
+    skos:definition "Measuring how accurately a simulation represents the real world for its intended use, by comparing its results with experimental data."@en .
+
+  ms:Verification a skos:Concept ; skos:inScheme ms:Scheme ;
+    skos:prefLabel "verification"@en ;
+    skos:altLabel "code verification"@en ;
+    skos:definition "Confirming that the simulation code solves its equations correctly (no coding or numerical errors). It says nothing about whether the equations match reality."@en .
+
+  ms:Model a skos:Concept ; skos:inScheme ms:Scheme ;
+    skos:prefLabel "model"@en ;
+    skos:altLabel "simulation model"@en ;
+    skos:definition "A computer program that predicts how a physical system behaves, for example how fast a battery drains in the cold."@en .
+
+  ms:Interface a skos:Concept ; skos:inScheme ms:Scheme ;
+    skos:prefLabel "interface"@en ;
+    skos:definition "The agreed data exchange between two simulations that run together (co-simulation)."@en .
+
+  ms:Fidelity a skos:Concept ; skos:inScheme ms:Scheme ;
+    skos:prefLabel "fidelity"@en ;
+    skos:definition "How much physical detail a simulation includes. High fidelity is not the same as validated."@en ;
+    # Asserted in the M&S team's own data (not reviewed in the app)
+    skos:relatedMatch te:Fidelity .
+
+  ms:UncertaintyQuantification a skos:Concept ; skos:inScheme ms:Scheme ;
+    skos:prefLabel "uncertainty quantification"@en ;
+    skos:altLabel "UQ"@en ;
+    skos:definition "Estimating the range of a simulation's predictions given what is not known exactly about its inputs."@en .
+}
+
+# ───────────────────────── Digital thread (OWL model) ─────────────────────────
+<urn:vocab:thread> {
+  dt:System a owl:Class ; rdfs:label "System" ;
+    rdfs:comment "The whole product being engineered, for example the Field Sensor Station." .
+  dt:Component a owl:Class ; rdfs:label "Component" ;
+    rdfs:comment "A part of the system, such as the battery or the radio." .
+  dt:Requirement a owl:Class ; rdfs:label "Requirement" ;
+    rdfs:comment "A testable statement of what the system shall do." .
+  dt:Interface a owl:Class ; rdfs:label "Interface" ;
+    rdfs:comment "A connection where two components exchange data, power or force." .
+  dt:VerificationActivity a owl:Class ; rdfs:label "Verification Activity" ;
+    rdfs:comment "A test, analysis, inspection or demonstration that shows a requirement is met." .
+  dt:SimulationModel a owl:Class ; rdfs:label "Simulation Model" ;
+    rdfs:comment "A computer model used as evidence in a verification activity." .
+  dt:ValidationEvidence a owl:Class ; rdfs:label "Validation Evidence" ;
+    rdfs:comment "Experimental data that a simulation model was compared against. A simulation model with no validated by link has no validation evidence." .
+
+
+  dt:hasComponent a owl:ObjectProperty ; rdfs:label "has component" ;
+    schema:domainIncludes dt:System ; schema:rangeIncludes dt:Component .
+  dt:satisfies a owl:ObjectProperty ; rdfs:label "satisfies" ;
+    rdfs:comment "The component helps meet the requirement." ;
+    schema:domainIncludes dt:Component ; schema:rangeIncludes dt:Requirement .
+  dt:verifiedBy a owl:ObjectProperty ; rdfs:label "verified by" ;
+    rdfs:comment "The verification activity that shows the requirement is met." ;
+    schema:domainIncludes dt:Requirement ; schema:rangeIncludes dt:VerificationActivity .
+  dt:usesModel a owl:ObjectProperty ; rdfs:label "uses model" ;
+    rdfs:comment "The simulation model a verification activity (usually an analysis) relies on." ;
+    schema:domainIncludes dt:VerificationActivity ; schema:rangeIncludes dt:SimulationModel .
+  dt:validatedBy a owl:ObjectProperty ; rdfs:label "validated by" ;
+    rdfs:comment "Experimental evidence the simulation model was compared against. Missing means the model has not been validated." ;
+    schema:domainIncludes dt:SimulationModel ; schema:rangeIncludes dt:ValidationEvidence .
+  dt:connects a owl:ObjectProperty ; rdfs:label "connects" ;
+    schema:domainIncludes dt:Interface ; schema:rangeIncludes dt:Component .
+
+  dt:requirementId a owl:DatatypeProperty ; rdfs:label "requirement ID" ;
+    rdfs:comment "Identifier such as REQ-001." ;
+    schema:domainIncludes dt:Requirement ; schema:rangeIncludes xsd:string .
+  dt:requirementText a owl:DatatypeProperty ; rdfs:label "requirement text" ;
+    schema:domainIncludes dt:Requirement ; schema:rangeIncludes xsd:string .
+  dt:method a owl:DatatypeProperty ; rdfs:label "method" ;
+    rdfs:comment "How a verification activity verifies: Test, Analysis, Inspection or Demonstration." ;
+    schema:domainIncludes dt:VerificationActivity ; schema:rangeIncludes xsd:string .
+
+  dt:RequirementShape a sh:NodeShape ; sh:targetClass dt:Requirement ;
+    sh:property [ sh:path dt:requirementId ; sh:name "requirement ID" ; sh:datatype xsd:string ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^REQ-[0-9]{3}$" ] ;
+    sh:property [ sh:path dt:verifiedBy ; sh:name "verified by" ; sh:minCount 1 ] .
+  dt:VerificationActivityShape a sh:NodeShape ; sh:targetClass dt:VerificationActivity ;
+    sh:property [ sh:path dt:method ; sh:name "method" ; sh:datatype xsd:string ; sh:minCount 1 ; sh:maxCount 1 ] .
+  dt:SimulationModelShape a sh:NodeShape ; sh:targetClass dt:SimulationModel ;
+    sh:property [ sh:path dt:validatedBy ; sh:name "validated by" ; sh:minCount 1 ] .
+}
+
+# ───────────────────────── FSS-1 program data ─────────────────────────
+<urn:data:fss1> {
+  fss:FSS1 a dt:System ; rdfs:label "Field Sensor Station FSS-1" ;
+    dt:hasComponent fss:SolarPanel, fss:Battery, fss:SensorPackage, fss:Radio, fss:Controller .
+
+  fss:SolarPanel a dt:Component ; rdfs:label "Solar panel" ; dt:satisfies fss:REQ001 .
+  fss:Battery a dt:Component ; rdfs:label "Battery pack" ; dt:satisfies fss:REQ001 .
+  fss:SensorPackage a dt:Component ; rdfs:label "Sensor package" ; dt:satisfies fss:REQ002 .
+  fss:Radio a dt:Component ; rdfs:label "Radio" ; dt:satisfies fss:REQ004 .
+  fss:Controller a dt:Component ; rdfs:label "Controller" ; dt:satisfies fss:REQ002, fss:REQ004 .
+
+  fss:REQ001 a dt:Requirement ; rdfs:label "REQ-001 Operate 72 hours without sun" ;
+    dt:requirementId "REQ-001" ;
+    dt:requirementText "The station shall operate for 72 hours with no solar input at -20 C." ;
+    dt:verifiedBy fss:VA_BatteryAnalysis .
+  fss:REQ002 a dt:Requirement ; rdfs:label "REQ-002 Report temperature every 10 minutes" ;
+    dt:requirementId "REQ-002" ;
+    dt:requirementText "The station shall report air temperature every 10 minutes, accurate to 0.5 C." ;
+    dt:verifiedBy fss:VA_ThermalChamber .
+  fss:REQ003 a dt:Requirement ; rdfs:label "REQ-003 Survive 100 km/h wind" ;
+    dt:requirementId "REQ-003" ;
+    dt:requirementText "The station shall survive sustained winds of 100 km/h." ;
+    dt:verifiedBy fss:VA_WindTunnel .
+  fss:REQ004 a dt:Requirement ; rdfs:label "REQ-004 Send data 5 km by radio" ;
+    dt:requirementId "REQ-004" ;
+    dt:requirementText "The station shall send its readings by radio to a base 5 km away." ;
+    dt:verifiedBy fss:VA_RangeDemo .
+
+  fss:VA_BatteryAnalysis a dt:VerificationActivity ; rdfs:label "Battery endurance analysis" ;
+    dt:method "Analysis" ; dt:usesModel fss:BatterySim .
+  fss:VA_ThermalChamber a dt:VerificationActivity ; rdfs:label "Thermal chamber test" ; dt:method "Test" .
+  fss:VA_WindTunnel a dt:VerificationActivity ; rdfs:label "Wind tunnel test (1:4 scale model)" ; dt:method "Test" .
+  fss:VA_RangeDemo a dt:VerificationActivity ; rdfs:label "Radio range demonstration" ; dt:method "Demonstration" .
+
+  # The battery simulation has no validation evidence yet: the gap the demo is about.
+  fss:BatterySim a dt:SimulationModel ; rdfs:label "Battery discharge simulation v2" .
+
+  fss:IF_PowerBus a dt:Interface ; rdfs:label "Power bus (solar panel to battery)" ;
+    dt:connects fss:SolarPanel, fss:Battery .
+  fss:IF_DataLink a dt:Interface ; rdfs:label "Data link (controller to radio)" ;
+    dt:connects fss:Controller, fss:Radio .
+}

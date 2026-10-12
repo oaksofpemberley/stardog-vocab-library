@@ -1,0 +1,53 @@
+# Voicebox schema for the digital-thread part of the MBSE demo (loaded into
+# tag:stardog:api:context:schema next to the app's samples/voicebox-schema.ttl).
+# Same IRIs, labels and domainIncludes/rangeIncludes as urn:vocab:thread, so the Explorer shows
+# each class once; rdfs:domain/rdfs:range are avoided because Voicebox asks with reasoning on.
+
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix schema: <https://schema.org/> .
+@prefix dt:     <http://example.org/mbse/digital-thread#> .
+
+dt:System a owl:Class ; rdfs:label "System" ;
+  rdfs:comment "The whole product being engineered, for example the Field Sensor Station." .
+dt:Component a owl:Class ; rdfs:label "Component" ;
+  rdfs:comment "A part of the system, such as the battery or the radio." .
+dt:Requirement a owl:Class ; rdfs:label "Requirement" ;
+  rdfs:comment "A testable statement of what the system shall do." .
+dt:Interface a owl:Class ; rdfs:label "Interface" ;
+  rdfs:comment "A connection where two components exchange data, power or force." .
+dt:VerificationActivity a owl:Class ; rdfs:label "Verification Activity" ;
+  rdfs:comment "A test, analysis, inspection or demonstration that shows a requirement is met." .
+dt:SimulationModel a owl:Class ; rdfs:label "Simulation Model" ;
+  rdfs:comment "A computer model used as evidence in a verification activity." .
+dt:ValidationEvidence a owl:Class ; rdfs:label "Validation Evidence" ;
+  rdfs:comment "Experimental data that a simulation model was compared against. A simulation model with no validated by link has no validation evidence." .
+
+rdfs:label rdfs:comment "Display name of a system, component, requirement, verification activity, simulation model or interface." .
+
+dt:hasComponent a owl:ObjectProperty ; rdfs:label "has component" ;
+  schema:domainIncludes dt:System ; schema:rangeIncludes dt:Component .
+dt:satisfies a owl:ObjectProperty ; rdfs:label "satisfies" ;
+  rdfs:comment "The component helps meet the requirement." ;
+  schema:domainIncludes dt:Component ; schema:rangeIncludes dt:Requirement .
+dt:verifiedBy a owl:ObjectProperty ; rdfs:label "verified by" ;
+  rdfs:comment "The verification activity that shows the requirement is met." ;
+  schema:domainIncludes dt:Requirement ; schema:rangeIncludes dt:VerificationActivity .
+dt:usesModel a owl:ObjectProperty ; rdfs:label "uses model" ;
+  rdfs:comment "The simulation model a verification activity (usually an analysis) relies on." ;
+  schema:domainIncludes dt:VerificationActivity ; schema:rangeIncludes dt:SimulationModel .
+dt:validatedBy a owl:ObjectProperty ; rdfs:label "validated by" ;
+  rdfs:comment "Experimental evidence the simulation model was compared against. Missing means the model has not been validated." ;
+  schema:domainIncludes dt:SimulationModel ; schema:rangeIncludes dt:ValidationEvidence .
+dt:connects a owl:ObjectProperty ; rdfs:label "connects" ;
+  schema:domainIncludes dt:Interface ; schema:rangeIncludes dt:Component .
+
+dt:requirementId a owl:DatatypeProperty ; rdfs:label "requirement ID" ;
+  rdfs:comment "Identifier such as REQ-001." ;
+  schema:domainIncludes dt:Requirement ; schema:rangeIncludes xsd:string .
+dt:requirementText a owl:DatatypeProperty ; rdfs:label "requirement text" ;
+  schema:domainIncludes dt:Requirement ; schema:rangeIncludes xsd:string .
+dt:method a owl:DatatypeProperty ; rdfs:label "method" ;
+  rdfs:comment "How a verification activity verifies: Test, Analysis, Inspection or Demonstration." ;
+  schema:domainIncludes dt:VerificationActivity ; schema:rangeIncludes xsd:string .

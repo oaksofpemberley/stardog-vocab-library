@@ -53,6 +53,8 @@ stardog data add -g tag:stardog:api:context:schema -- vocab_communities_demo sam
 
 The `-o` options and the second command are only needed for Voicebox (see below). In-app, **Help → Quick Start** walks through the whole flow.
 
+For a model-based systems engineering example (systems engineering, test and modeling & simulation teams that each mean something different by "validation", plus a digital thread with SHACL rules), see the step-by-step demo in [demos/mbse/README.md](demos/mbse/README.md).
+
 ### Configuration
 
 Copy `.env.example` to `.env` (gitignored, never commit it) and set your values:
