@@ -17,8 +17,12 @@ AUTH="${STARDOG_ADMIN_USER:-admin}:${STARDOG_ADMIN_PASSWORD:-admin}"
 c() { curl -s -u "$AUTH" "$@"; }
 check() { [ "$2" = "$3" ] || { echo "FAILED: $1 (HTTP $2)" >&2; exit 1; }; }
 
+# Stardog answers "Kernel is initializing" for a while after it starts, so wait until it is ready.
+for _ in $(seq 1 60); do [ "$(c -o /dev/null -w '%{http_code}' "$URL/admin/alive")" = 200 ] && break; sleep 2; done
+
 echo "→ rebuilding $DB"
-c -o /dev/null -X DELETE "$URL/admin/databases/$DB" || true
+s=$(c -o /dev/null -w '%{http_code}' -X DELETE "$URL/admin/databases/$DB")
+[ "$s" = 200 ] || [ "$s" = 404 ] || { echo "FAILED: drop old $DB (HTTP $s)" >&2; exit 1; }
 s=$(c -o /dev/null -w '%{http_code}' -X POST "$URL/admin/databases" \
   -F 'root={"dbname":"'"$DB"'","options":{"query.all.graphs":true,"voicebox.enabled":true,"search.enabled":true,"search.semantic.enabled":true},"files":[]}')
 check "create database" "$s" 201

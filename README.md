@@ -176,13 +176,38 @@ Each change then appears as a `Query` event carrying the full SPARQL update and 
 ## Security notes
 
 - **Use a least-privilege Stardog account for the proxy, not `admin`.** `scripts/setup-secured-demo.sh` (below) creates `vocab_app` for this. It can read and write data but cannot create or drop databases or manage users. Put it in `.env` as `STARDOG_USERNAME` / `STARDOG_PASSWORD`.
-- **The dev proxy is for local use.** Anyone who can reach port 5180 acts as the proxy's Stardog user. Vite listens on `localhost` only by default; do not start it with `--host` on a shared network. The proxy only adds credentials to same-origin requests, so other websites cannot use it (CSRF).
+- **The dev proxy is for local use.** For a server, use the [production image](#production-image). Anyone who can reach port 5180 acts as the proxy's Stardog user. Vite listens on `localhost` only by default; do not start it with `--host` on a shared network. The proxy only adds credentials to same-origin requests, so other websites cannot use it (CSRF).
 - **Sign in with personal Stardog accounts for accountable attribution.** The name in "Your Name" is self-reported. When users sign in, the app records the Stardog account Stardog itself reports (via a token it issues) on every audit entry, proposal and review. With the shared proxy login, everyone appears as the proxy's account. The password is used once to obtain a token and is never stored. The recorded account is written by the app, so someone writing to the database directly could forge it: treat it as a record, and use Stardog's own audit logging when you need proof of who changed what.
 - **Owner approval is an app-enforced workflow, not a Stardog permission.** With "Require group owners to approve" on, the app only lets the owning accounts approve changes to their groups, hand groups over, or switch the rule off. Anyone with `write` on the database can still change the governance graph directly, so the audit log is a record, not tamper-proof evidence. For hard enforcement, use Stardog permissions on the graphs.
 - The dev proxy strips `WWW-Authenticate` from Stardog's 401 responses, so a wrong sign-in password shows the app's error instead of a browser login popup.
 - All values written to Stardog are escaped (`sparqlString`) and IRIs are validated (`sparqlIri`) in `src/lib/sparql.js`. Never build SPARQL by inserting raw text.
 - CSV exports neutralise spreadsheet formulas (cells starting with `=`, `+`, `-`, `@`).
 - Fonts are bundled with the app (no third-party requests), so it also works offline or air-gapped.
+
+## Production image
+
+`npm run dev` and its proxy are for development only. For a server, build the container image:
+
+```bash
+docker build -t vocab-library .
+docker run -d -p 8080:8080 --read-only --tmpfs /tmp --cap-drop ALL \
+  --add-host stardog:<stardog host IP> vocab-library
+```
+
+Open `http://<host>:8080`. The image contains only the built app and nginx, which serves it and forwards `/stardog/` to Stardog.
+
+- **Stardog address:** `http://stardog:5820` by default. To use another address, replace `/etc/nginx/stardog-upstream.conf` (see `deploy/stardog-upstream.conf`, for example with a Kubernetes ConfigMap). An `https://` address works too. nginx resolves the host name when it starts and refuses to start (`host not found in upstream`) if it can't, so a wrong address shows up immediately.
+- **No shared account:** unlike the dev proxy, the image adds no credentials. Each person signs in with their own Stardog account (or pastes a token), so Stardog permissions and the audit trail apply per person. The database list needs a signed-in account, so on the connection form, type the database name and sign in.
+- **Hardening:**
+  - Chainguard base images pinned by digest; the runtime has no shell or package manager.
+  - Runs as a non-root user (65532) and writes only to `/tmp`, so the root filesystem can be read-only.
+  - A strict Content-Security-Policy (scripts and connections only to its own origin), plus `X-Frame-Options: DENY`, `nosniff` and `no-referrer`.
+  - No requests leave the browser except to `/stardog/`.
+  - `GET /healthz` is the liveness probe.
+- **Iron Bank:** the bases are build arguments (`BUILD_REGISTRY`/`BUILD_IMAGE`/`BUILD_TAG`, `BASE_REGISTRY`/`BASE_IMAGE`/`BASE_TAG`), so the image can be rebuilt on approved Iron Bank images. An Iron Bank submission also needs a `hardening_manifest.yaml`, which this repository does not include.
+- **Verified:**
+  - An SBOM (syft) scanned with grype and trivy reported no known vulnerabilities in either image (arm64 and amd64), and hadolint and trivy found no Dockerfile issues.
+  - The app worked end to end in a browser through the container with a read-only root filesystem and all capabilities dropped: sign-in, browsing, a governance write, Graph View and export, with no Content-Security-Policy violations.
 
 ## How big a vocabulary it handles
 
