@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Parser } from 'sparqljs';
-import { findSharedTerms, findSimilarTerms, labelTokens, pairKey, normalizeLabel, mergeMappings, MAPPING_RELATIONS } from './communities';
+import { findSharedTerms, findSimilarTerms, labelTokens, pairKey, normalizeLabel, mergeMappings, MAPPING_RELATIONS, approvalsNeeded } from './communities';
 import * as gov from './governance';
 
 const SKOS = 'http://www.w3.org/2004/02/skos/core#';
@@ -201,5 +201,28 @@ describe('findSimilarTerms at scale', () => {
     const pairs = findSimilarTerms(many, { limit: 25 });
     expect(pairs).toHaveLength(25);
     expect(pairs.every((p, i) => i === 0 || pairs[i - 1].score >= p.score)).toBe(true);
+  });
+});
+
+describe('approvalsNeeded (owner approval)', () => {
+  const concepts = [concept('cs:Model', 'cs:S', 'model'), concept('phys:Model', 'phys:S', 'model'), concept('biz:Model', 'biz:S', 'model')];
+  const schemeUris = new Set(['cs:S', 'phys:S', 'biz:S']);
+  const stewards = { 'cs:S': { account: 'alice' }, 'phys:S': { account: 'bob' }, 'biz:S': { name: 'Biz team' } };
+  const ctx = { requireOwnerApproval: true, concepts, schemeUris, stewardOf: (u) => stewards[u] || null };
+  const accounts = (p, c = ctx) => approvalsNeeded(p, c).map(x => x.account).sort();
+
+  it('needs both owners for a mapping across two account-owned groups', () => {
+    expect(accounts({ type: 'mapping', mappingSource: 'cs:Model', mappingTarget: 'phys:Model' })).toEqual(['alice', 'bob']);
+  });
+  it('adds nobody for a group owned by a plain name', () => {
+    expect(accounts({ type: 'mapping', mappingSource: 'cs:Model', mappingTarget: 'biz:Model' })).toEqual(['alice']);
+    expect(accounts({ type: 'modify', termUri: 'biz:Model' })).toEqual([]);
+  });
+  it('uses the target group for a new term, and the scheme itself when the term is a group', () => {
+    expect(accounts({ type: 'add', proposedScheme: 'phys:S' })).toEqual(['bob']);
+    expect(accounts({ type: 'deprecate', termUri: 'cs:S' })).toEqual(['alice']);
+  });
+  it('needs nobody when owner approval is off', () => {
+    expect(accounts({ type: 'modify', termUri: 'cs:Model' }, { ...ctx, requireOwnerApproval: false })).toEqual([]);
   });
 });

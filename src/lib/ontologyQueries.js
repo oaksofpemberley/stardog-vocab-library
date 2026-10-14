@@ -2,7 +2,7 @@
  * SPARQL queries for ontology introspection.
  * Supports both OWL and SKOS vocabularies.
  */
-import { sparqlIri } from './sparql';
+import { sparqlIri } from './sparql.js';
 
 /** Discover all classes (OWL + SKOS) */
 export const CLASSES_QUERY = `

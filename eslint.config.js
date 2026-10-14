@@ -18,4 +18,9 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // The command-line tool runs in Node, not the browser
+    files: ['bin/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
 ])

@@ -209,6 +209,32 @@ Open `http://<host>:8080`. The image contains only the built app and nginx, whic
   - An SBOM (syft) scanned with grype and trivy reported no known vulnerabilities in either image (arm64 and amd64), and hadolint and trivy found no Dockerfile issues.
   - The app worked end to end in a browser through the container with a read-only root filesystem and all capabilities dropped: sign-in, browsing, a governance write, Graph View and export, with no Content-Security-Policy violations.
 
+## Command line (scripts, CI and AI agents)
+
+`bin/vocab-gov.js` does the governance work without the browser. It calls the same `src/lib` functions as the app, so the same rules apply:
+- values are escaped;
+- every change is written together with its audit entry;
+- a proposal is applied only while it is still pending, so approving twice does nothing;
+- owner approval is checked, including both owners for a mapping across two groups and hand-over only by the current owner.
+
+Output is JSON on stdout. An error is printed as `{"error": "..."}` on stderr, with exit code 1.
+
+```bash
+npm run gov -- --help
+npm run gov -- terms --db my_db --search model
+npm run gov -- set-status http://example.org/vocab/cs#Model Deprecated --db my_db
+npm run gov -- propose mapping --db my_db --source <iri> --relation closeMatch --target <iri> \
+  --title "CS model ~ physics model" --description "Both are predictive models"
+npm run gov -- proposals --status pending --db my_db   # includes requiredOwners and approvedBy
+npm run gov -- review <proposal-iri-or-ending> approve --db my_db
+```
+
+- **Credentials:** set `STARDOG_TOKEN`, or `STARDOG_USERNAME` + `STARDOG_PASSWORD` (exchanged for a token). They are read from the environment first, then from `.env`.
+- **Server and identity:** `STARDOG_URL` selects the server (default `http://localhost:5820`). The account Stardog confirms is recorded on every change, the same as for a signed-in user in the app.
+- **Permissions:** Stardog's own permissions still decide what the account may write.
+- **Not covered:** the CLI has no command to turn owner approval on or off; use the Groups page for that.
+- **Verified:** every command was run against a local Stardog, including a two-owner approval with two real accounts.
+
 ## How big a vocabulary it handles
 
 Graph size (instance data) hardly matters: only the per-class instance counts read it, and on 5.8 million triples every query the app runs on connect finished in under 0.3 s. That count runs in the background with a 30-second limit; if it times out, the app just shows no counts. What grows with size is the **vocabulary** (classes, properties and SKOS concepts), because the app loads every term into the browser. Measured on a laptop with generated SKOS vocabularies (10 groups, realistic word frequencies):
@@ -247,6 +273,8 @@ npm run build
 ## Project Structure
 
 ```
+bin/
+└── vocab-gov.js               # Command line: governance without the browser (JSON output)
 src/
 ├── components/
 │   ├── AnalyticsView.jsx      # Vocabulary health dashboard
@@ -273,7 +301,7 @@ src/
 │   ├── sparql.js              # SPARQL client, escaping (sparqlString/sparqlIri)
 │   ├── governance.js          # Governance reads/writes (VOCAB:GOVERNANCE graph)
 │   ├── ontologyQueries.js     # Ontology, scheme, concept and mapping queries
-│   ├── communities.js         # Shared-term detection, mapping relations
+│   ├── communities.js         # Shared-term detection, mapping relations, who must approve
 │   ├── useCommunityData.js    # Data for the Communities views
 │   ├── exporters.js           # Turtle / JSON-LD / CSV export
 │   ├── layout.js              # Cycle-safe diagram layering

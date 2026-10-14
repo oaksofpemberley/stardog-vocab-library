@@ -3,7 +3,7 @@ import { useStardog } from '../contexts/StardogContext';
 import { querySparql, getBindings, val, getLocalName } from './sparql';
 import { SCHEMES_QUERY, CONCEPTS_QUERY, MAPPINGS_QUERY } from './ontologyQueries';
 import { fetchProposals, fetchSettings, fetchOwnerApprovals } from './governance';
-import { mergeMappings, findSimilarTerms, pairKey } from './communities';
+import { mergeMappings, findSimilarTerms, pairKey, groupsOfProposal as groupsOf, approvalsNeeded as approvalsFor } from './communities';
 
 /**
  * Groups (concept schemes), their concepts, all mappings and governance proposals
@@ -66,28 +66,11 @@ export function useCommunityData() {
       if (!declared) return null;
       return { name: /^[a-z][a-z0-9+.-]*:\/\//i.test(declared) ? getLocalName(declared) : declared, governed: false };
     };
-    // Groups a term belongs to (a scheme is its own group)
-    const schemesOf = (uri) => {
-      if (!uri) return [];
-      if (schemeByUri.has(uri)) return [uri];
-      return [...new Set(state.concepts.filter(c => c.uri === uri && c.scheme).map(c => c.scheme))];
-    };
-    /** Groups a proposal touches */
-    const groupsOfProposal = (p) => {
-      if (p.type === 'mapping' || p.type === 'unmap') return [...new Set([...schemesOf(p.mappingSource), ...schemesOf(p.mappingTarget)])];
-      if (p.type === 'add') return p.proposedScheme ? [p.proposedScheme] : [];
-      return schemesOf(p.termUri);
-    };
-    /**
-     * Stardog accounts that must approve this proposal: with owner approval on, the account
-     * owners of every group it touches. Groups owned by a plain name (no account) add nobody.
-     */
-    const approvalsNeeded = (p) => {
-      if (!state.settings.requireOwnerApproval) return [];
-      return groupsOfProposal(p)
-        .map(scheme => ({ scheme, account: getTermSteward(scheme)?.account }))
-        .filter(x => x.account);
-    };
+    const schemeUris = new Set(schemeByUri.keys());
+    const groupsOfProposal = (p) => groupsOf(p, state.concepts, schemeUris);
+    const approvalsNeeded = (p) => approvalsFor(p, {
+      requireOwnerApproval: state.settings.requireOwnerApproval, concepts: state.concepts, schemeUris, stewardOf: getTermSteward,
+    });
     const mappings = mergeMappings(state.triples, state.proposals);
     // Suggestions are a to-do list: pairs that already have any mapping (even pending) are left out
     const mapped = new Set(mappings.filter(m => m.status !== 'retired' && m.status !== 'rejected').map(m => pairKey(m.source, m.target)));

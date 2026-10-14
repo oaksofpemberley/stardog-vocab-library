@@ -5,7 +5,7 @@
  *   - every literal is escaped
  *   - CSV cells are quoted and guarded against spreadsheet formula injection
  */
-import { sparqlString, sparqlIri, getNamespace, getLocalName } from './sparql';
+import { sparqlString, sparqlIri, getNamespace, getLocalName } from './sparql.js';
 
 const KNOWN_PREFIXES = {
   rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',

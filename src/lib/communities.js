@@ -103,6 +103,35 @@ export function mergeMappings(triples, proposals) {
   return rows;
 }
 
+/* ── Owner approval: who must approve a proposal ── */
+
+/** Groups a term belongs to (a scheme is its own group). schemeUris: Set of scheme IRIs */
+export function schemesOf(uri, concepts, schemeUris) {
+  if (!uri) return [];
+  if (schemeUris.has(uri)) return [uri];
+  return [...new Set(concepts.filter(c => c.uri === uri && c.scheme).map(c => c.scheme))];
+}
+
+/** Groups a proposal touches */
+export function groupsOfProposal(p, concepts, schemeUris) {
+  const of = (uri) => schemesOf(uri, concepts, schemeUris);
+  if (p.type === 'mapping' || p.type === 'unmap') return [...new Set([...of(p.mappingSource), ...of(p.mappingTarget)])];
+  if (p.type === 'add') return p.proposedScheme ? [p.proposedScheme] : [];
+  return of(p.termUri);
+}
+
+/**
+ * Stardog accounts that must approve this proposal: with owner approval on, the account
+ * owners of every group it touches. Groups owned by a plain name (no account) add nobody.
+ * stewardOf(uri) → { account } | null
+ */
+export function approvalsNeeded(p, { requireOwnerApproval, concepts, schemeUris, stewardOf }) {
+  if (!requireOwnerApproval) return [];
+  return groupsOfProposal(p, concepts, schemeUris)
+    .map(scheme => ({ scheme, account: stewardOf(scheme)?.account }))
+    .filter(x => x.account);
+}
+
 /* ── Similar (not identical) labels across groups ── */
 
 const STOPWORDS = new Set(['a', 'an', 'the', 'of', 'and', 'or', 'for', 'to', 'in', 'on', 'by', 'with']);

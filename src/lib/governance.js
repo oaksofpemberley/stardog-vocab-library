@@ -5,9 +5,9 @@
  * change is sent together with its audit entry in ONE update request, so Stardog commits
  * both or neither.
  */
-import { updateSparql, querySparql, getBindings, val, sparqlString as str, sparqlIri as iri } from './sparql';
-import { homeGraphQuery } from './ontologyQueries';
-import { MAPPING_RELATION_IRIS, GOVERNED_MAPPINGS_GRAPH } from './communities';
+import { updateSparql, querySparql, getBindings, val, sparqlString as str, sparqlIri as iri } from './sparql.js';
+import { homeGraphQuery } from './ontologyQueries.js';
+import { MAPPING_RELATION_IRIS, GOVERNED_MAPPINGS_GRAPH } from './communities.js';
 
 const GOV_GRAPH = 'VOCAB:GOVERNANCE';
 const GOV_NS = 'http://vocab.gov/ontology#';
