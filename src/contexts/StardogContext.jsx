@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { querySparql, listDatabases, getBindings, val, hasPendingWrites, requestToken, fetchIdentity, tokenAccount } from '../lib/sparql';
-import { CLASSES_QUERY, PROPERTIES_QUERY, INSTANCE_COUNTS_QUERY, NAMED_GRAPHS_QUERY, SHACL_SHAPES_QUERY, isBuiltInTerm } from '../lib/ontologyQueries';
+import { CLASSES_QUERY, PROPERTIES_QUERY, INSTANCE_COUNTS_QUERY, NAMED_GRAPHS_QUERY, SHACL_SHAPES_QUERY, isBuiltInTerm, propertiesFromBindings } from '../lib/ontologyQueries';
 import { fetchStatuses, fetchStewards, setActingAccount } from '../lib/governance';
 import { loadJson, saveJson, loadText, saveText, removeKey } from '../lib/storage';
 import { readHash, updateHash } from '../lib/urlState';
@@ -86,23 +86,7 @@ export function StardogProvider({ children }) {
       setClasses(getBindings(classRes).map(b => ({
         uri: val(b, 'class'), label: val(b, 'label'), comment: val(b, 'comment'), type: val(b, 'type'),
       })).filter(c => !isBuiltInTerm(c.uri)));
-      const props = getBindings(propRes).filter(b => !isBuiltInTerm(val(b, 'prop'))).map(b => ({
-        uri: val(b, 'prop'), label: val(b, 'label'), comment: val(b, 'comment'),
-        type: val(b, 'type'),
-        domain: val(b, 'soDomain') || val(b, 'rdfsDomain'),
-        range: val(b, 'soRange') || val(b, 'rdfsRange'),
-      }));
-      // Deduplicate props that appear multiple times due to multiple domains
-      const propMap = {};
-      for (const p of props) {
-        if (!propMap[p.uri]) {
-          propMap[p.uri] = { ...p, domains: p.domain ? [p.domain] : [], ranges: p.range ? [p.range] : [] };
-        } else {
-          if (p.domain && !propMap[p.uri].domains.includes(p.domain)) propMap[p.uri].domains.push(p.domain);
-          if (p.range && !propMap[p.uri].ranges.includes(p.range)) propMap[p.uri].ranges.push(p.range);
-        }
-      }
-      setProperties(Object.values(propMap));
+      setProperties(propertiesFromBindings(getBindings(propRes)));
 
       // Mark as connected — the essential data is loaded
       setConnected(true);

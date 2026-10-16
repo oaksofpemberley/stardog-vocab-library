@@ -10,7 +10,7 @@
 import { parseArgs } from 'node:util';
 import * as gov from '../src/lib/governance.js';
 import { querySparql, listDatabases, requestToken, fetchIdentity, getBindings, val, getLocalName } from '../src/lib/sparql.js';
-import { CLASSES_QUERY, PROPERTIES_QUERY, SCHEMES_QUERY, CONCEPTS_QUERY, MAPPINGS_QUERY, isBuiltInTerm } from '../src/lib/ontologyQueries.js';
+import { CLASSES_QUERY, PROPERTIES_QUERY, SCHEMES_QUERY, CONCEPTS_QUERY, MAPPINGS_QUERY, isBuiltInTerm, propertiesFromBindings } from '../src/lib/ontologyQueries.js';
 import { MAPPING_RELATIONS, relationLabel, mergeMappings, approvalsNeeded, schemesOf } from '../src/lib/communities.js';
 
 const HELP = `vocab-gov: Vocabulary Library governance from the command line. Prints JSON.
@@ -86,7 +86,7 @@ async function loadVocabulary(c, { withProperties = false } = {}) {
   ]);
   const terms = new Map();
   for (const b of classes) terms.set(val(b, 'class'), { uri: val(b, 'class'), label: val(b, 'label'), definition: val(b, 'comment'), type: val(b, 'type') });
-  for (const b of props) if (!terms.has(val(b, 'prop'))) terms.set(val(b, 'prop'), { uri: val(b, 'prop'), label: val(b, 'label'), definition: val(b, 'comment'), type: val(b, 'type') });
+  for (const p of propertiesFromBindings(props)) if (!terms.has(p.uri)) terms.set(p.uri, { uri: p.uri, label: p.label, definition: p.comment, type: p.type });
   const v = {
     terms: [...terms.values()].filter(t => !isBuiltInTerm(t.uri)),
     schemes: schemes.map(b => ({ uri: val(b, 'scheme'), label: val(b, 'label'), declaredOwner: val(b, 'declaredOwner'), concepts: Number(val(b, 'concepts') || 0) })),

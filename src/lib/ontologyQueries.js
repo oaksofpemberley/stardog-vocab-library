@@ -2,7 +2,7 @@
  * SPARQL queries for ontology introspection.
  * Supports both OWL and SKOS vocabularies.
  */
-import { sparqlIri } from './sparql.js';
+import { sparqlIri, val } from './sparql.js';
 
 /** Discover all classes (OWL + SKOS) */
 export const CLASSES_QUERY = `
@@ -32,13 +32,17 @@ SELECT DISTINCT ?class ?label ?comment ?type WHERE {
 ORDER BY ?label
 `;
 
-/** Discover all properties — uses separate var names to avoid Stardog rebind errors */
+/**
+ * Discover all properties: one row per (property, key, value), merged by propertiesFromBindings.
+ * One OPTIONAL over a UNION, not one OPTIONAL per attribute: chained OPTIONALs multiply every
+ * value, and a database holding its ontology in 22 named graphs produced 288M rows (3+ minutes).
+ */
 export const PROPERTIES_QUERY = `
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX so: <https://schema.org/>
 
-SELECT DISTINCT ?prop ?label ?comment ?type ?soDomain ?rdfsDomain ?soRange ?rdfsRange WHERE {
+SELECT DISTINCT ?prop ?type ?key ?value WHERE {
   {
     ?prop a owl:ObjectProperty .
     BIND("ObjectProperty" AS ?type)
@@ -46,16 +50,45 @@ SELECT DISTINCT ?prop ?label ?comment ?type ?soDomain ?rdfsDomain ?soRange ?rdfs
     ?prop a owl:DatatypeProperty .
     BIND("DatatypeProperty" AS ?type)
   }
-  OPTIONAL { ?prop rdfs:label ?label }
-  OPTIONAL { ?prop rdfs:comment ?comment }
-  OPTIONAL { ?prop so:domainIncludes ?soDomain }
-  OPTIONAL { ?prop rdfs:domain ?rdfsDomain }
-  OPTIONAL { ?prop so:rangeIncludes ?soRange }
-  OPTIONAL { ?prop rdfs:range ?rdfsRange }
   FILTER(!isBlank(?prop))
+  OPTIONAL {
+    { ?prop rdfs:label ?value . BIND("label" AS ?key) }
+    UNION { ?prop rdfs:comment ?value . BIND("comment" AS ?key) }
+    UNION { ?prop so:domainIncludes ?value . BIND("soDomain" AS ?key) }
+    UNION { ?prop rdfs:domain ?value . BIND("rdfsDomain" AS ?key) }
+    UNION { ?prop so:rangeIncludes ?value . BIND("soRange" AS ?key) }
+    UNION { ?prop rdfs:range ?value . BIND("rdfsRange" AS ?key) }
+  }
 }
-ORDER BY ?label
 `;
+
+/**
+ * Merge PROPERTIES_QUERY rows into one entry per property, sorted by label. schema.org
+ * domainIncludes/rangeIncludes win over rdfs:domain/range when a property has both.
+ */
+export function propertiesFromBindings(bindings) {
+  const byUri = new Map();
+  for (const b of bindings) {
+    const uri = val(b, 'prop');
+    if (isBuiltInTerm(uri)) continue;
+    let p = byUri.get(uri);
+    if (!p) {
+      p = { uri, label: '', comment: '', type: val(b, 'type'), soDomain: [], rdfsDomain: [], soRange: [], rdfsRange: [] };
+      byUri.set(uri, p);
+    }
+    const key = val(b, 'key'), value = val(b, 'value');
+    // Several labels (e.g. per language): keep the smallest, so the choice doesn't depend on row order
+    if (key === 'label' || key === 'comment') { if (!p[key] || value < p[key]) p[key] = value; }
+    else if (key && !p[key].includes(value)) p[key].push(value);
+  }
+  return [...byUri.values()]
+    .map(({ soDomain, rdfsDomain, soRange, rdfsRange, ...p }) => {
+      const domains = soDomain.length ? soDomain : rdfsDomain;
+      const ranges = soRange.length ? soRange : rdfsRange;
+      return { ...p, domain: domains[0] || '', range: ranges[0] || '', domains, ranges };
+    })
+    .sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+}
 
 /** Discover SKOS hierarchical relationships */
 export const SKOS_HIERARCHY_QUERY = `
