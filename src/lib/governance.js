@@ -460,6 +460,12 @@ export async function reviewProposal(endpoint, db, token, proposal, decision, re
  */
 export async function reviewProposals(endpoint, db, token, proposals, decision, reviewer, comment, options = {}) {
   if (proposals.length > MAX_PROPOSALS_PER_REQUEST) throw new Error(`At most ${MAX_PROPOSALS_PER_REQUEST} proposals at a time.`);
+  // Reviewed together only as a bulk add: new terms for ONE group, so one set of owners decides.
+  // Anyone who can write the governance graph could tag another proposal with a batch id;
+  // it must not ride along with the batch (or past another group's owner).
+  if (proposals.length > 1 && !proposals.every(p => p.type === 'add' && p.proposedScheme === proposals[0].proposedScheme)) {
+    throw new Error('Only "Add term" proposals for one group can be reviewed together. Review the others one by one.');
+  }
   const homeCache = new Map();
   const home = (uri) => {
     if (!homeCache.has(uri)) homeCache.set(uri, findHome(endpoint, db, token, uri));

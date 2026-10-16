@@ -203,4 +203,12 @@ describe('bulk add (one batch, one request)', () => {
     // every operation is guarded by its own proposal still being pending
     for (const op of ops) expect(JSON.stringify(op.where)).toContain('"pending"');
   });
+
+  it('refuses to review anything but one group\'s new terms together (a batch id is only data)', async () => {
+    const adds = rows.map((r, i) => ({ ...r, id: `urn:p:${i}` }));
+    const smuggled = { id: 'urn:p:x', type: 'deprecate', termUri: 'urn:other:Term', title: 't', batch: 'urn:b' };
+    await expect(gov.reviewProposals('E', 'db', '', [...adds, smuggled], 'approved', 'Rev', 'ok')).rejects.toThrow(/one group/);
+    await expect(gov.reviewProposals('E', 'db', '', [adds[0], { ...adds[1], proposedScheme: 'urn:other' }], 'approved', 'Rev', 'ok')).rejects.toThrow(/one group/);
+    expect(sent).toHaveLength(0);
+  });
 });

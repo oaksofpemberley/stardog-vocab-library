@@ -77,13 +77,16 @@ export default function ReviewQueue() {
 
   const pending = proposals.filter(p => p.status === 'pending');
   const resolved = proposals.filter(p => p.status !== 'pending');
-  // A bulk add shows as one card (in the order of its newest proposal); everything else one card each
+  // A bulk add shows as one card (in the order of its newest proposal); everything else one card each.
+  // Only "Add term" proposals for the same group by the same proposer are grouped: a batch id is
+  // just data, so anything else carrying it gets its own card instead of hiding inside the batch.
   const cards = [];
   const batches = new Map();
   for (const p of pending) {
-    if (!p.batch) { cards.push({ key: p.id, items: [p] }); continue; }
-    if (!batches.has(p.batch)) { const card = { key: p.batch, batch: p.batch, items: [] }; batches.set(p.batch, card); cards.push(card); }
-    batches.get(p.batch).items.push(p);
+    if (!p.batch || p.type !== 'add') { cards.push({ key: p.id, items: [p] }); continue; }
+    const key = JSON.stringify([p.batch, p.proposedScheme, p.proposedBy, p.proposedByAccount]);
+    if (!batches.has(key)) { const card = { key, batch: key, items: [] }; batches.set(key, card); cards.push(card); }
+    batches.get(key).items.push(p);
   }
 
   /** What approving this proposal will change (or changed) */

@@ -53,5 +53,29 @@ trivy image vocab-library:scan-amd64
 ## What the scans don't cover
 
 - **Your Stardog server.** The app is a browser front end. Data, accounts and permissions live in Stardog, which you scan and harden separately.
-- **Iron Bank.** The image uses Chainguard bases pinned by digest. The bases are build arguments, so you can rebuild on approved Iron Bank images (see "Production image" in the [README](../README.md)) and scan that build with the same script. This repository has no `hardening_manifest.yaml`, so it is not packaged for an Iron Bank submission.
+- **Iron Bank.** See the next section.
 - **Dynamic testing.** No penetration test or DAST scan has been run. The README's "Security notes" section describes the controls in the code (SPARQL value escaping, the dev proxy's same-origin check, the image's Content-Security-Policy and non-root, read-only filesystem).
+
+## Iron Bank
+
+[Iron Bank](https://repo1.dso.mil/dsop) is the DoD's repository of hardened container images. Its pipeline builds each image from an approved base and scans it with Anchore, Twistlock (Prisma Cloud) and OpenSCAP before it is accepted.
+
+| Iron Bank step | Here | Status |
+|---|---|---|
+| Vulnerability scan (Anchore) | grype, Anchore's open-source scanner, on the image's SBOM, plus trivy | Run by `scripts/security-scan.sh`; 0 findings in the latest results |
+| Vulnerability scan (Twistlock / Prisma Cloud) | Not reproducible without a Prisma Cloud licence; trivy covers the same kind of check (OS and application packages) | Not run |
+| Compliance scan (OpenSCAP) | Applies to a Red Hat UBI base | Not run: the image uses Chainguard bases |
+| Approved base image | The bases are build arguments (`BUILD_REGISTRY`/`BUILD_IMAGE`/`BUILD_TAG`, `BASE_REGISTRY`/`BASE_IMAGE`/`BASE_TAG`), so the image can be rebuilt on approved Iron Bank images | Not done: the default bases are Chainguard images pinned by digest |
+| `hardening_manifest.yaml` (sources, digests, maintainers) | Not in this repository | Missing |
+| `LICENSE` file at the root | The README states the license, but there is no `LICENSE` file | Missing |
+
+To check a rebuild on Iron Bank bases yourself, build with the base arguments set (see "Production image" in the [README](../README.md)), then run the same scans on that image:
+
+```bash
+docker build --build-arg BASE_REGISTRY=registry1.dso.mil/ironbank --build-arg BASE_IMAGE=<approved image> \
+  --build-arg BASE_TAG=<tag> -t vocab-library:ironbank .
+syft vocab-library:ironbank -o cyclonedx-json=sbom.cdx.json && grype sbom:sbom.cdx.json
+trivy image vocab-library:ironbank
+```
+
+An Iron Bank submission would also need the two missing files above and a build on an approved base. Those have not been done.
