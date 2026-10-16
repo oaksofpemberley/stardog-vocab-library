@@ -208,6 +208,7 @@ Open `http://<host>:8080`. The image contains only the built app and nginx, whic
 - **Verified:**
   - An SBOM (syft) scanned with grype and trivy reported no known vulnerabilities in either image (arm64 and amd64), and hadolint and trivy found no Dockerfile issues.
   - The app worked end to end in a browser through the container with a read-only root filesystem and all capabilities dropped: sign-in, browsing, a governance write, Graph View and export, with no Content-Security-Policy violations.
+  - Scan results, SBOMs and the steps to repeat every scan yourself: [docs/security-scans.md](docs/security-scans.md).
 
 ## Command line (scripts, CI and AI agents)
 
