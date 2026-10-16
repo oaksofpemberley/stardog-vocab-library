@@ -1,0 +1,31 @@
+apiVersion: v1
+# Iron Bank path; the program that sponsors the submission chooses the final name.
+name: "opensource/stardog-vocab-library/vocab-library"
+tags:
+  - "set-at-release"
+  - "latest"
+args:
+  BASE_IMAGE: "redhat/ubi/ubi9-minimal"
+  # Confirm the current tag on registry1.dso.mil before submitting.
+  BASE_TAG: "9.6"
+labels:
+  org.opencontainers.image.title: "vocab-library"
+  org.opencontainers.image.description: "Vocabulary Governance Library: a web app for governing vocabularies stored in Stardog"
+  org.opencontainers.image.licenses: "MIT"
+  org.opencontainers.image.url: "https://github.com/oaksofpemberley/stardog-vocab-library"
+  org.opencontainers.image.vendor: "stardog-vocab-library contributors"
+  org.opencontainers.image.version: "set-at-release"
+  mil.dso.ironbank.image.keywords: "vocabulary,governance,skos,knowledge-graph,stardog"
+  mil.dso.ironbank.image.type: "opensource"
+  mil.dso.ironbank.product.name: "Vocabulary Governance Library"
+resources:
+  # The built web app (static files). scripts/build-ironbank-bundle.sh makes it and prints its sha256.
+  - url: "set-at-release"
+    filename: "vocab-library-dist.tar.gz"
+    validation:
+      type: "sha256"
+      value: "set-at-release"
+maintainers:
+  - name: "stardog-vocab-library maintainers"
+    username: "oaksofpemberley"
+    email: "set-at-release"

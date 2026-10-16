@@ -62,20 +62,13 @@ trivy image vocab-library:scan-amd64
 
 | Iron Bank step | Here | Status |
 |---|---|---|
-| Vulnerability scan (Anchore) | grype, Anchore's open-source scanner, on the image's SBOM, plus trivy | Run by `scripts/security-scan.sh`; 0 findings in the latest results |
+| Vulnerability scan (Anchore) | grype, Anchore's open-source scanner, on the image's SBOM, plus trivy | Run by `scripts/security-scan.sh` on the main image (0 findings in the latest results), and by hand on the `ironbank/` image (see its README) |
 | Vulnerability scan (Twistlock / Prisma Cloud) | Not reproducible without a Prisma Cloud licence; trivy covers the same kind of check (OS and application packages) | Not run |
-| Compliance scan (OpenSCAP) | Applies to a Red Hat UBI base | Not run: the image uses Chainguard bases |
-| Approved base image | The bases are build arguments (`BUILD_REGISTRY`/`BUILD_IMAGE`/`BUILD_TAG`, `BASE_REGISTRY`/`BASE_IMAGE`/`BASE_TAG`), so the image can be rebuilt on approved Iron Bank images | Not done: the default bases are Chainguard images pinned by digest |
-| `hardening_manifest.yaml` (sources, digests, maintainers) | Not in this repository | Missing |
-| `LICENSE` file at the root | The README states the license, but there is no `LICENSE` file | Missing |
+| Compliance scan (OpenSCAP) | Applies to the UBI-based image in [`ironbank/`](../ironbank/) | Not run |
+| Approved base image | [`ironbank/Dockerfile`](../ironbank/Dockerfile) builds on Red Hat UBI 9 minimal (`redhat/ubi/ubi9-minimal`) with nginx from the UBI repositories | Built and tested locally on the public UBI 9 minimal image |
+| `hardening_manifest.yaml` (sources, digests, maintainers) | [`ironbank/hardening_manifest.yaml`](../ironbank/hardening_manifest.yaml); the app is a reproducible, checksummed resource built by `scripts/build-ironbank-bundle.sh` | Present; URL, sha256, version and maintainer email are filled in at release |
+| `LICENSE` file | [`LICENSE`](../LICENSE) (MIT), also in `ironbank/` | Present |
 
-To check a rebuild on Iron Bank bases yourself, build with the base arguments set (see "Production image" in the [README](../README.md)), then run the same scans on that image:
+The [`ironbank/`](../ironbank/) folder is laid out like an Iron Bank image repository. Its [README](../ironbank/README.md) explains how to build it offline, try it on the public UBI image, and scan it. The image has the same app and behaviour as the main image, but its UBI base carries published CVEs that Red Hat has not fixed yet. On 2026-10-16 none of its findings had a fix available; Iron Bank reviews such findings with written justifications.
 
-```bash
-docker build --build-arg BASE_REGISTRY=registry1.dso.mil/ironbank --build-arg BASE_IMAGE=<approved image> \
-  --build-arg BASE_TAG=<tag> -t vocab-library:ironbank .
-syft vocab-library:ironbank -o cyclonedx-json=sbom.cdx.json && grype sbom:sbom.cdx.json
-trivy image vocab-library:ironbank
-```
-
-An Iron Bank submission would also need the two missing files above and a build on an approved base. Those have not been done.
+A submission still needs a sponsoring program, a build in the Iron Bank pipeline (Twistlock and OpenSCAP run there), the release values in the manifest, and justifications for the base image's open CVEs. None of that has been done.

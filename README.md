@@ -205,7 +205,7 @@ Open `http://<host>:8080`. The image contains only the built app and nginx, whic
   - A strict Content-Security-Policy (scripts and connections only to its own origin), plus `X-Frame-Options: DENY`, `nosniff` and `no-referrer`.
   - No requests leave the browser except to `/stardog/`.
   - `GET /healthz` is the liveness probe.
-- **Iron Bank:** the bases are build arguments (`BUILD_REGISTRY`/`BUILD_IMAGE`/`BUILD_TAG`, `BASE_REGISTRY`/`BASE_IMAGE`/`BASE_TAG`), so the image can be rebuilt on approved Iron Bank images. An Iron Bank submission also needs a `hardening_manifest.yaml`, which this repository does not include.
+- **Iron Bank:** [`ironbank/`](ironbank/) packages the same app on Red Hat UBI 9 minimal with a `hardening_manifest.yaml`, built offline from a reproducible, checksummed bundle (`scripts/build-ironbank-bundle.sh`). See [ironbank/README.md](ironbank/README.md) for building, testing and scan status.
 - **Verified:**
   - An SBOM (syft) scanned with grype and trivy reported no known vulnerabilities in either image (arm64 and amd64), and hadolint and trivy found no Dockerfile issues.
   - The app worked end to end in a browser through the container with a read-only root filesystem and all capabilities dropped: sign-in, browsing, a governance write, Graph View and export, with no Content-Security-Policy violations.

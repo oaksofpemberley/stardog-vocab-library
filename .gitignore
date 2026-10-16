@@ -23,3 +23,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Iron Bank resource built by scripts/build-ironbank-bundle.sh
+ironbank/*.tar.gz
