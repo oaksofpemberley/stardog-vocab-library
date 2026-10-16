@@ -7,13 +7,13 @@ A modern, browser-based vocabulary governance tool for browsing, managing, and a
 ## Features
 
 - **Ontology Explorer** — Browse classes and properties with namespace-grouped sidebar, search, and status filtering
-- **Graph Visualization** — Interactive D3-powered force-directed graph of class relationships with namespace coloring and lifecycle status indicators
+- **Graph Visualization** — Force-directed graph of classes, object properties and the class hierarchy, with Find, Focus (1–3 links out) for large ontologies, and the groups' terms that reference each class (see [docs/graph-views.md](docs/graph-views.md))
 - **Governance Workflows** — Assign lifecycle statuses (Active, Draft, Under Review, Deprecated, Retired) to any term with full audit logging
 - **Communities** — Each group's SKOS concept scheme shown with its owner; **Shared Terms** puts one label's different meanings side by side and suggests similarly worded terms to map; **Mappings** lists asserted, approved, pending, rejected and retired mappings between groups (see [docs/communities-and-mappings.md](docs/communities-and-mappings.md))
 - **Governed changes** — Proposals to add, modify, deprecate, map terms or remove a mapping go through review; approving one applies the change (mappings go to the `VOCAB:MAPPINGS` graph) together with its audit entry
 - **Term authoring** — Add a group's terms one at a time or in bulk (paste or open a CSV/TSV, with a preview that flags duplicates and labels other groups use), edit them, and link them to ontology classes; a class's page and the Designer list every group's term that references it
 - **Accounts and owner approval** — Optional sign-in with your Stardog account; group owners can be Stardog accounts, and an optional rule requires the owners of affected groups to approve changes (both owners for a mapping between two groups)
-- **Designer View** — Hierarchical class diagram with property counts and lifecycle status
+- **Designer View** — Top-down class diagram (parents above subclasses, wide rows wrapped) with the same Find, Focus, details panel and group terms
 - **Impact Analysis** — Analyze upstream/downstream dependencies before making changes to your vocabulary
 - **SHACL Constraints** — View SHACL shapes and validation rules associated with classes
 - **Import & Export** — Export vocabularies as Turtle, JSON-LD, or CSV
@@ -289,6 +289,8 @@ src/
 │   ├── ErrorBoundary.jsx      # Keeps a crash in one view from blanking the app
 │   ├── Explorer.jsx           # Main ontology browser
 │   ├── GovernancePanel.jsx    # Lifecycle status management
+│   ├── GraphControls.jsx      # Find, Focus and switches shared by Graph and Designer View
+│   ├── GraphDetailPanel.jsx   # Details of the selected class in Graph and Designer View
 │   ├── GraphView.jsx          # D3 force-directed graph
 │   ├── GroupsView.jsx         # Communities: groups (concept schemes) and owners
 │   ├── ImpactAnalysis.jsx     # Dependency analysis
@@ -311,7 +313,8 @@ src/
 │   ├── terms.js               # New terms: suggested IRIs, CSV/TSV parsing, checks before proposing
 │   ├── useCommunityData.js    # Data for the Communities views
 │   ├── exporters.js           # Turtle / JSON-LD / CSV export
-│   ├── layout.js              # Cycle-safe diagram layering
+│   ├── graphModel.js          # What the graph views draw: edges, focus, term overlay, search
+│   ├── layout.js              # Cycle-safe diagram layering and wrapped rows
 │   ├── storage.js             # Safe browser storage
 │   ├── urlState.js            # Page state in the URL hash
 │   ├── useDraft.js            # Unsent input that survives refresh

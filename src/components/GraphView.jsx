@@ -1,6 +1,13 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
-import { useStardog } from '../contexts/StardogContext';
-import { toPrefixed, getNamespace } from '../lib/sparql';
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { toPrefixed } from '../lib/sparql';
+import { relationLabel } from '../lib/communities';
+import { selectView, termsByClass, GROUP_COLORS } from '../lib/graphModel';
+import { useGraphData } from '../lib/useGraphData';
+import { useGraphControls } from '../lib/useGraphControls';
+import { updateHash } from '../lib/urlState';
+import GraphControls from './GraphControls';
+import GraphDetailPanel from './GraphDetailPanel';
+import { Share2 } from 'lucide-react';
 import * as d3 from 'd3';
 
 const COLOR_PALETTE = [
@@ -20,297 +27,260 @@ function nsLabel(ns) {
   return last.charAt(0).toUpperCase() + last.slice(1);
 }
 
-export default function GraphView() {
-  const { classes, properties, getTermStatus } = useStardog();
+// Above this many drawn nodes the layout is computed before drawing (G3.4), instead of animating
+const STATIC_LAYOUT_ABOVE = 300;
+
+export default function GraphView({ onNavigate }) {
+  const controls = useGraphControls();
+  const { graph, community, properties } = useGraphData({ showHierarchy: controls.hierarchy, showDeprecated: controls.deprecated });
   const svgRef = useRef(null);
   const containerRef = useRef(null);
-  const [tooltip, setTooltip] = useState(null);
-  const [showDeprecated, setShowDeprecated] = useState(true);
+  const zoomRef = useRef(null);
+  const panTo = useRef(null);
   const [legendOpen, setLegendOpen] = useState(false);
 
-  // Discover namespaces dynamically and assign colors
   const nsColorMap = useMemo(() => {
-    const nsList = [...new Set(classes.map(c => getNamespace(c.uri)))];
     const map = {};
-    nsList.forEach((ns, i) => { map[ns] = COLOR_PALETTE[i % COLOR_PALETTE.length]; });
+    [...new Set(graph.nodes.map(n => n.ns))].forEach((ns, i) => { map[ns] = COLOR_PALETTE[i % COLOR_PALETTE.length]; });
     return map;
-  }, [classes]);
+  }, [graph.nodes]);
+  const groupColor = useMemo(() => {
+    const idx = new Map(community.schemes.map((s, i) => [s.uri, i]));
+    return (scheme) => GROUP_COLORS[(idx.get(scheme) ?? 0) % GROUP_COLORS.length];
+  }, [community.schemes]);
 
-  const nsLegend = useMemo(() => {
-    return Object.entries(nsColorMap).map(([ns, color]) => ({
-      ns, color, label: nsLabel(ns),
-    }));
-  }, [nsColorMap]);
+  const view = useMemo(() => selectView({
+    nodes: graph.nodes, edges: graph.edges, focus: controls.focus, hops: controls.hops,
+    showAll: controls.showAll, hideUnconnected: controls.unconnected,
+  }), [graph, controls.focus, controls.hops, controls.showAll, controls.unconnected]);
 
-  // The force simulation stalls the page past a few thousand nodes (50,000 terms: 1.3 s freezes),
-  // and such a picture is unreadable anyway. Draw the best-connected classes up to this cap.
-  const MAX_NODES = 1000;
+  const terms = useMemo(() => termsByClass(view.nodes.map(n => n.id), community.mappings, community.conceptByUri),
+    [view.nodes, community.mappings, community.conceptByUri]);
+  const termCount = [...terms.values()].reduce((a, t) => a + t.length, 0);
 
-  const { nodes, links, hiddenCount } = useMemo(() => {
-    const filteredClasses = showDeprecated
-      ? classes
-      : classes.filter(c => !['Deprecated', 'Retired'].includes(getTermStatus(c.uri)));
+  const select = controls.setSelected;
+  const goTo = useCallback((id) => {
+    // Move to a class: select it, and focus on it if it is not drawn
+    if (view.nodes.some(n => n.id === id)) { panTo.current = id; controls.setSelected(id); }
+    else controls.setFocus(id);
+  }, [view.nodes, controls]);
+  const openInExplorer = (id) => { updateHash({ term: id, tab: null, focus: null }); onNavigate?.('explore'); };
 
-    const classUris = new Set(filteredClasses.map(c => c.uri));
-    const nodes = filteredClasses.map(c => ({
-      id: c.uri, label: c.label || toPrefixed(c.uri),
-      ns: getNamespace(c.uri), status: getTermStatus(c.uri),
-    }));
-
-    const links = [];
-    for (const p of properties) {
-      if (p.type !== 'ObjectProperty') continue;
-      const domains = p.domains || (p.domain ? [p.domain] : []);
-      const ranges = p.ranges || (p.range ? [p.range] : []);
-      for (const d of domains) {
-        for (const r of ranges) {
-          if (classUris.has(d) && classUris.has(r) && d !== r) {
-            links.push({ source: d, target: r, label: p.label || toPrefixed(p.uri) });
-          }
-        }
-      }
-    }
-    if (nodes.length <= MAX_NODES) return { nodes, links, hiddenCount: 0 };
-    const degree = new Map();
-    for (const l of links) for (const id of [l.source, l.target]) degree.set(id, (degree.get(id) || 0) + 1);
-    const kept = [...nodes].sort((a, b) => (degree.get(b.id) || 0) - (degree.get(a.id) || 0)).slice(0, MAX_NODES);
-    const keptIds = new Set(kept.map(n => n.id));
-    return {
-      nodes: kept,
-      links: links.filter(l => keptIds.has(l.source) && keptIds.has(l.target)),
-      hiddenCount: nodes.length - kept.length,
-    };
-  }, [classes, properties, getTermStatus, showDeprecated]);
-
+  /* ── Draw ── */
   useEffect(() => {
-    if (!svgRef.current || !containerRef.current || nodes.length === 0) return;
+    if (!svgRef.current || !containerRef.current || view.nodes.length === 0) return;
+    const svgEl = svgRef.current;
+    const width = svgEl.clientWidth;
+    const height = svgEl.clientHeight;
+    d3.select(svgEl).selectAll('*').remove();
+    const svg = d3.select(svgEl).attr('width', width).attr('height', height);
 
-    const container = containerRef.current;
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-
-    d3.select(svgRef.current).selectAll('*').remove();
-
-    const svg = d3.select(svgRef.current)
-      .attr('width', width)
-      .attr('height', height);
+    const defs = svg.append('defs');
+    for (const [idm, fill] of [['arrow-prop', 'rgba(148,163,184,0.55)'], ['arrow-sub', 'none']]) {
+      defs.append('marker').attr('id', idm).attr('viewBox', '0 -5 10 10').attr('refX', 26).attr('refY', 0)
+        .attr('markerWidth', 7).attr('markerHeight', 7).attr('orient', 'auto')
+        .append('path').attr('d', 'M0,-5L10,0L0,5Z').attr('fill', fill).attr('stroke', 'rgba(148,163,184,0.7)');
+    }
 
     const g = svg.append('g');
+    const zoom = d3.zoom().scaleExtent([0.05, 4]).on('zoom', (event) => {
+      g.attr('transform', event.transform);
+      // Level of detail (G3.2): names hidden when far, edge labels only when near
+      svg.classed('lod-far', event.transform.k < 0.55).classed('lod-near', event.transform.k >= 1.1);
+    });
+    svg.call(zoom).on('dblclick.zoom', null);
+    zoomRef.current = { svg, zoom, g, width, height };
 
-    const zoom = d3.zoom()
-      .scaleExtent([0.2, 4])
-      .on('zoom', (event) => g.attr('transform', event.transform));
-    svg.call(zoom);
-
-    svg.append('defs').selectAll('marker')
-      .data(['arrow'])
-      .join('marker')
-      .attr('id', 'arrow')
-      .attr('viewBox', '0 -5 10 10')
-      .attr('refX', 28)
-      .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M0,-5L10,0L0,5')
-      .attr('fill', 'rgba(148,163,184,0.4)');
+    // Nodes: classes, plus groups' terms when switched on (G4.1)
+    const nodes = view.nodes.map(n => ({ ...n, kind: 'class', status: graph.status.get(n.id), terms: terms.get(n.id) || [] }));
+    const links = view.edges.map(e => ({ ...e }));
+    if (controls.terms) {
+      for (const n of nodes.filter(x => x.kind === 'class')) for (const t of n.terms) {
+        const id = `term|${n.id}|${t.uri}|${t.relation}|${t.status}`;
+        nodes.push({ id, kind: 'term', label: t.label, scheme: t.scheme, status: t.status, uri: t.uri, classId: n.id });
+        links.push({ source: id, target: n.id, kind: 'term', label: relationLabel(t.relation), status: t.status, scheme: t.scheme });
+      }
+    }
+    const center = view.focus;
+    for (const n of nodes) if (n.id === center) { n.fx = width / 2; n.fy = height / 2; }
 
     const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id(d => d.id).distance(120))
-      .force('charge', d3.forceManyBody().strength(-300))
+      .force('link', d3.forceLink(links).id(d => d.id)
+        .distance(l => (l.kind === 'term' ? 55 : l.kind === 'subclass' ? 80 : 130))
+        .strength(l => (l.kind === 'term' ? 1 : 0.5)))
+      .force('charge', d3.forceManyBody().strength(d => (d.kind === 'term' ? -60 : -320)))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(30));
+      .force('collision', d3.forceCollide().radius(d => (d.kind === 'term' ? 34 : Math.min(70, 24 + d.label.length * 2))));
 
-    const link = g.append('g')
-      .selectAll('line')
-      .data(links)
-      .join('line')
-      .attr('stroke', 'rgba(148,163,184,0.2)')
-      .attr('stroke-width', 1.5)
-      .attr('marker-end', 'url(#arrow)');
+    const link = g.append('g').selectAll('line').data(links).join('line')
+      .attr('class', d => `edge edge-${d.kind}${d.status === 'pending' ? ' edge-pending' : ''}`)
+      .attr('stroke', d => (d.kind === 'term' ? groupColor(d.scheme) : null))
+      .attr('marker-end', d => (d.kind === 'property' ? 'url(#arrow-prop)' : d.kind === 'subclass' ? 'url(#arrow-sub)' : null));
+    const linkLabel = g.append('g').selectAll('text').data(links.filter(l => l.kind !== 'subclass')).join('text')
+      .attr('class', d => `edge-label edge-label-${d.kind}`).attr('text-anchor', 'middle').text(d => d.label);
 
-    const linkLabel = g.append('g')
-      .selectAll('text')
-      .data(links)
-      .join('text')
-      .text(d => d.label)
-      .attr('font-size', 8)
-      .attr('fill', 'rgba(148,163,184,0.4)')
-      .attr('text-anchor', 'middle')
-      .attr('font-family', 'Inter, sans-serif');
-
-    const node = g.append('g')
-      .selectAll('g')
-      .data(nodes)
-      .join('g')
+    const node = g.append('g').selectAll('g').data(nodes).join('g')
+      .attr('class', d => `gnode gnode-${d.kind}${d.kind === 'term' && d.status === 'pending' ? ' term-pending' : ''}`)
+      .attr('data-id', d => d.id)
+      .style('cursor', 'pointer')
       .call(d3.drag()
-        .on('start', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x; d.fy = d.y;
-        })
+        .on('start', (event, d) => { if (!event.active) simulation.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
         .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
-        .on('end', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null; d.fy = null;
-        })
-      );
+        .on('end', (event, d) => { if (!event.active) simulation.alphaTarget(0); if (d.id !== center) { d.fx = null; d.fy = null; } }));
 
-    node.append('circle')
-      .attr('r', 20)
-      .attr('fill', d => nsColorMap[d.ns] || '#6366f1')
-      .attr('fill-opacity', 0.15)
-      .attr('stroke', d => STATUS_BORDER[d.status] || '#22c55e')
-      .attr('stroke-width', 2.5);
+    const cls = node.filter(d => d.kind === 'class');
+    cls.append('circle').attr('class', 'gnode-ring').attr('r', 18)
+      .attr('fill', d => nsColorMap[d.ns] || '#6366f1').attr('fill-opacity', 0.18)
+      .attr('stroke', d => STATUS_BORDER[d.status] || '#22c55e').attr('stroke-width', 2.5);
+    cls.append('circle').attr('r', 5).attr('fill', d => nsColorMap[d.ns] || '#6366f1');
+    cls.append('text').attr('class', 'node-label').attr('dy', 32).attr('text-anchor', 'middle').text(d => d.label);
+    // How many groups' terms reference this class (G4.2)
+    const badge = cls.filter(d => d.terms.length > 0).append('g').attr('class', 'term-badge').attr('transform', 'translate(14,-14)');
+    badge.append('circle').attr('r', 8);
+    badge.append('text').attr('text-anchor', 'middle').attr('dy', 3.5).text(d => d.terms.length);
+    cls.append('title').text(d => `${d.label}\n${toPrefixed(d.id)}\nStatus: ${d.status}${d.terms.length ? `\n${d.terms.length} group term(s) reference this` : ''}`);
+    cls.on('click', (event, d) => { event.stopPropagation(); select(d.id); });
+    cls.on('dblclick', (event, d) => { event.stopPropagation(); controls.setFocus(d.id); });
 
-    node.append('circle')
-      .attr('r', 5)
-      .attr('fill', d => nsColorMap[d.ns] || '#6366f1');
-
-    node.append('text')
-      .text(d => d.label)
-      .attr('dy', 32)
-      .attr('text-anchor', 'middle')
-      .attr('font-size', 10)
-      .attr('font-weight', 600)
-      .attr('fill', '#94a3b8')
-      .attr('font-family', 'Inter, sans-serif');
-
-    node.on('mouseover', function (event, d) {
-      d3.select(this).select('circle').transition().attr('r', 24).attr('fill-opacity', 0.25);
-      link.attr('stroke', l =>
-        l.source.id === d.id || l.target.id === d.id ? 'rgba(99,102,241,0.6)' : 'rgba(148,163,184,0.1)'
-      ).attr('stroke-width', l =>
-        l.source.id === d.id || l.target.id === d.id ? 2.5 : 1
-      );
-      setTooltip({ x: event.pageX - container.getBoundingClientRect().left, y: event.pageY - container.getBoundingClientRect().top, text: `${d.label}\n${toPrefixed(d.id)}\nStatus: ${d.status}` });
-    }).on('mouseout', function () {
-      d3.select(this).select('circle').transition().attr('r', 20).attr('fill-opacity', 0.15);
-      link.attr('stroke', 'rgba(148,163,184,0.2)').attr('stroke-width', 1.5);
-      setTooltip(null);
+    const trm = node.filter(d => d.kind === 'term');
+    trm.append('rect').attr('class', 'term-pill').attr('rx', 9).attr('height', 18).attr('y', -9)
+      .attr('stroke', d => groupColor(d.scheme)).attr('fill', d => groupColor(d.scheme));
+    trm.append('text').attr('class', 'term-label').attr('text-anchor', 'middle').attr('dy', 4).text(d => d.label);
+    trm.each(function () {
+      const t = d3.select(this);
+      const w = t.select('text').node().getComputedTextLength() + 16;
+      t.select('rect').attr('width', w).attr('x', -w / 2);
     });
+    trm.append('title').text(d => `${d.label} (${community.schemeLabel(d.scheme)})\n${d.status}. Click to open in the Explorer.`);
+    trm.on('click', (event, d) => { event.stopPropagation(); openInExplorer(d.uri); });
 
-    simulation.on('tick', () => {
-      link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-      linkLabel.attr('x', d => (d.source.x + d.target.x) / 2)
-        .attr('y', d => (d.source.y + d.target.y) / 2);
+    svg.on('click', () => select(null));
+
+    const tick = () => {
+      link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      linkLabel.attr('x', d => (d.source.x + d.target.x) / 2).attr('y', d => (d.source.y + d.target.y) / 2 - 3);
       node.attr('transform', d => `translate(${d.x},${d.y})`);
-    });
+    };
+    const fit = (duration = 500) => {
+      const b = g.node().getBBox();
+      if (!b.width || !b.height) return;
+      const { width: w, height: h } = zoomRef.current;
+      const scale = Math.min(w / (b.width + 80), h / (b.height + 80), 1.4);
+      svg.transition().duration(duration).call(zoom.transform,
+        d3.zoomIdentity.translate(w / 2 - (b.x + b.width / 2) * scale, h / 2 - (b.y + b.height / 2) * scale).scale(scale));
+    };
+    zoomRef.current.fit = fit;
+    zoomRef.current.positions = () => new Map(nodes.map(n => [n.id, n]));
 
-    simulation.on('end', () => {
-      const bounds = g.node().getBBox();
-      const padding = 40;
-      const scale = Math.min(width / (bounds.width + padding * 2), height / (bounds.height + padding * 2), 1.5);
-      const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
-      const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
-      svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
-    });
-
+    if (nodes.length > STATIC_LAYOUT_ABOVE) {
+      // Large: settle the layout first, then draw once (no slow animation)
+      simulation.stop();
+      for (let i = 0; i < 300; i++) simulation.tick();
+      tick();
+      fit(0);
+    } else {
+      simulation.on('tick', tick);
+      simulation.on('end', () => fit());
+    }
     return () => simulation.stop();
-  }, [nodes, links, nsColorMap]);
+    // controls/select/openInExplorer are stable or read at event time
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, terms, controls.terms, nsColorMap, groupColor, graph.status]);
+
+  /* ── Selection highlight (no relayout) ── */
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const sel = controls.selected;
+    const near = new Set(sel ? [sel] : []);
+    for (const e of view.edges) {
+      if (e.source === sel) near.add(e.target);
+      if (e.target === sel) near.add(e.source);
+    }
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('.gnode').classed('selected', d => d.id === sel).classed('keep', d => near.has(d.id) || d.classId === sel);
+    svg.selectAll('.edge').classed('hl', d => Boolean(sel) && ((d.source.id ?? d.source) === sel || (d.target.id ?? d.target) === sel));
+  }, [controls.selected, view]);
+
+  /* ── Move to a class chosen in the details panel (a click on the canvas does not pan) ── */
+  useEffect(() => {
+    if (!panTo.current || panTo.current !== controls.selected) return;
+    panTo.current = null;
+    const z = zoomRef.current;
+    const p = z?.positions?.().get(controls.selected);
+    if (!p || p.x === undefined) return;
+    const k = Math.max(d3.zoomTransform(z.svg.node()).k, 0.9);
+    z.svg.transition().duration(450).call(z.zoom.transform, d3.zoomIdentity.translate(z.width / 2 - p.x * k, z.height / 2 - p.y * k).scale(k));
+  }, [controls.selected]);
+
+  /* ── Keep the drawing sized to the canvas (the toolbar can change height) ── */
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let last = '';
+    const ro = new ResizeObserver(() => {
+      const z = zoomRef.current;
+      const size = `${el.clientWidth}x${el.clientHeight}`;
+      if (!z || size === last) return;
+      const first = last === '';
+      last = size;
+      if (first) return;
+      z.width = el.clientWidth; z.height = el.clientHeight;
+      z.svg.attr('width', z.width).attr('height', z.height);
+      z.fit?.(0);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const zoomApi = {
+    in: () => zoomRef.current && zoomRef.current.svg.transition().duration(250).call(zoomRef.current.zoom.scaleBy, 1.4),
+    out: () => zoomRef.current && zoomRef.current.svg.transition().duration(250).call(zoomRef.current.zoom.scaleBy, 1 / 1.4),
+    fit: () => zoomRef.current?.fit?.(),
+  };
+
+  const nsLegend = Object.entries(nsColorMap).map(([ns, color]) => ({ ns, color, label: nsLabel(ns) }));
+  const legendGroups = community.schemes.filter(s => [...terms.values()].some(ts => ts.some(t => t.scheme === s.uri)));
 
   return (
-    <div style={{ height: '100%', position: 'relative' }} ref={containerRef}>
-      {hiddenCount > 0 && (
-        <div className="list-cap-note" style={{ position: 'absolute', top: 12, left: 12, zIndex: 10, maxWidth: 420 }}>
-          Showing the {MAX_NODES.toLocaleString()} best-connected classes; {hiddenCount.toLocaleString()} more are not drawn. Use the Explorer to find any term.
-        </div>
-      )}
-      <div style={{
-        position: 'absolute', top: 12, right: 12, zIndex: 10,
-        display: 'flex', flexDirection: 'column', gap: 4,
-      }}>
-        <button className="btn btn-secondary btn-sm" onClick={() => setShowDeprecated(!showDeprecated)}
-          style={{ fontSize: '0.72rem' }}>
-          {showDeprecated ? 'Hide' : 'Show'} Deprecated
-        </button>
-      </div>
+    <div className="designer-view" ref={containerRef}>
+      <GraphControls title="Graph View" icon={<Share2 size={16} />} controls={controls} graph={graph} view={view} zoom={zoomApi}
+        termCount={controls.terms ? termCount : 0} />
+      <div className="graph-stage">
+        <svg ref={svgRef} className="graph-canvas" aria-label="Class graph" />
 
-      {/* Dynamic legend – collapsible */}
-      <div
-        style={{
-          position: 'absolute', bottom: 12, left: 12, zIndex: 10,
-          background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--border)', backdropFilter: 'blur(8px)',
-          boxShadow: 'var(--shadow-md)',
-          fontSize: '0.72rem', color: 'var(--text-secondary)',
-          maxWidth: '60vw', overflow: 'hidden',
-          transition: 'box-shadow 0.25s ease',
-        }}
-      >
-        {/* Clickable header */}
-        <div
-          onClick={() => setLegendOpen(prev => !prev)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 12px', cursor: 'pointer', userSelect: 'none',
-            fontWeight: 600, letterSpacing: '0.02em',
-          }}
-          title={legendOpen ? 'Collapse legend' : 'Expand legend'}
-        >
-          <svg
-            width="12" height="12" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" strokeWidth="2.5"
-            strokeLinecap="round" strokeLinejoin="round"
-            style={{
-              transition: 'transform 0.25s ease',
-              transform: legendOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-              flexShrink: 0,
-            }}
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-          <span>Legend</span>
-          {!legendOpen && (
-            <span style={{ display: 'flex', gap: 3, marginLeft: 4 }}>
-              {nsLegend.slice(0, 5).map(item => (
-                <span key={item.ns} style={{ width: 8, height: 8, borderRadius: '50%', background: item.color }} />
+        {/* Legend – collapsible */}
+        <div className="graph-legend">
+          <button className="graph-legend-head" onClick={() => setLegendOpen(o => !o)} aria-expanded={legendOpen}>
+            <span style={{ transform: legendOpen ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' }}>›</span>
+            Legend
+            {!legendOpen && nsLegend.slice(0, 5).map(item => <span key={item.ns} className="legend-dot" style={{ background: item.color }} />)}
+          </button>
+          {legendOpen && (
+            <div className="graph-legend-body">
+              {nsLegend.map(item => (
+                <span key={item.ns} className="legend-item"><span className="legend-dot" style={{ background: item.color }} />{item.label}</span>
               ))}
-              {nsLegend.length > 5 && (
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: '8px' }}>+{nsLegend.length - 5}</span>
-              )}
-            </span>
+              {legendGroups.map(s => (
+                <span key={s.uri} className="legend-item"><span className="legend-pill" style={{ borderColor: groupColor(s.uri) }} />{s.label || toPrefixed(s.uri)} term</span>
+              ))}
+              <span className="legend-item muted">Ring = status · → property · ▷ is a (subclass) · dashed = group term · number = terms that reference the class</span>
+            </div>
           )}
         </div>
 
-        {/* Collapsible body */}
-        <div
-          style={{
-            maxHeight: legendOpen ? 300 : 0,
-            opacity: legendOpen ? 1 : 0,
-            transition: 'max-height 0.3s ease, opacity 0.25s ease, padding 0.3s ease',
-            padding: legendOpen ? '4px 12px 8px' : '0 12px',
-            display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
-            overflow: 'hidden',
-          }}
-        >
-          {nsLegend.map(item => (
-            <span key={item.ns} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
-              {item.label}
-            </span>
-          ))}
-          <span style={{ color: 'var(--text-muted)' }}>|</span>
-          <span>Border = lifecycle status</span>
-        </div>
+        {view.nodes.length === 0 && (
+          <div className="empty-state" style={{ position: 'absolute', inset: 0 }}>
+            <h3>No Classes to Display</h3>
+            <p>Connect to a Stardog database with an ontology (OWL classes) to see the knowledge graph.</p>
+          </div>
+        )}
+        {controls.selected && (
+          <GraphDetailPanel id={controls.selected} graph={graph} properties={properties} community={community}
+            color={nsColorMap[graph.nodes.find(n => n.id === controls.selected)?.ns]}
+            onSelect={goTo} onFocus={controls.setFocus} onOpen={openInExplorer} onClose={() => select(null)} />
+        )}
       </div>
 
-      {tooltip && (
-        <div className="graph-tooltip" style={{ left: tooltip.x + 10, top: tooltip.y - 10 }}>
-          {tooltip.text.split('\n').map((line, i) => <div key={i}>{line}</div>)}
-        </div>
-      )}
-
-      <svg ref={svgRef} style={{ width: '100%', height: '100%', background: 'var(--bg-primary)' }} />
-
-      {nodes.length === 0 && (
-        <div className="empty-state" style={{ position: 'absolute', inset: 0 }}>
-          <h3>No Classes to Display</h3>
-          <p>Connect to a Stardog database with an ontology to see the knowledge graph.</p>
-        </div>
-      )}
     </div>
   );
 }
-

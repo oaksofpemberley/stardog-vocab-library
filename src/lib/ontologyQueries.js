@@ -90,6 +90,16 @@ export function propertiesFromBindings(bindings) {
     .sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
 }
 
+/** Class hierarchy (child rdfs:subClassOf parent), named classes only; for Graph and Designer View */
+export const SUBCLASS_QUERY = `
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT ?child ?parent WHERE {
+  ?child rdfs:subClassOf ?parent .
+  FILTER(isIRI(?child) && isIRI(?parent) && ?child != ?parent)
+}
+`;
+
 /** Discover SKOS hierarchical relationships */
 export const SKOS_HIERARCHY_QUERY = `
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>

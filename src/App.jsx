@@ -86,8 +86,8 @@ function AppContent() {
   const renderView = () => {
     switch (activeView) {
       case 'explore': return <Explorer />;
-      case 'graph': return <GraphView />;
-      case 'designer': return <DesignerView />;
+      case 'graph': return <GraphView onNavigate={openView} />;
+      case 'designer': return <DesignerView onNavigate={openView} />;
       case 'groups': return <GroupsView />;
       case 'shared': return <SharedTermsView />;
       case 'mappings': return <MappingsView />;

@@ -57,3 +57,46 @@ export function assignLayers(ids, links) {
   }
   return layer;
 }
+
+/**
+ * Grid positions for a top-down diagram (docs/graph-views.md, G3.5): layers from assignLayers,
+ * each layer ordered so a node sits near the nodes that point to it (one barycenter pass), and
+ * wrapped onto further rows when it has more than `maxPerRow` nodes.
+ * @param labelOf id → text, to order nodes with nothing above them
+ * @returns {Map<string, {row: number, col: number, layer: number}>} col is centred on 0
+ */
+export function layoutRows(ids, links, { maxPerRow = 12, labelOf = (id) => id } = {}) {
+  const layer = assignLayers(ids, links);
+  const parents = new Map(ids.map(id => [id, []]));
+  for (const { source, target } of links) {
+    if (parents.has(target) && layer.has(source) && layer.get(source) < layer.get(target)) parents.get(target).push(source);
+  }
+  const byLayer = new Map();
+  for (const id of ids) {
+    const l = layer.get(id);
+    if (!byLayer.has(l)) byLayer.set(l, []);
+    byLayer.get(l).push(id);
+  }
+  const out = new Map();
+  const xOf = new Map();
+  let row = 0;
+  for (const l of [...byLayer.keys()].sort((a, b) => a - b)) {
+    const members = byLayer.get(l);
+    const center = (id) => {
+      const xs = parents.get(id).map(p => xOf.get(p)).filter(x => x !== undefined);
+      return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : Infinity;
+    };
+    const keyed = members.map(id => ({ id, c: center(id), label: String(labelOf(id)) }));
+    keyed.sort((a, b) => a.c - b.c || a.label.localeCompare(b.label));
+    for (let start = 0; start < keyed.length; start += maxPerRow) {
+      const chunk = keyed.slice(start, start + maxPerRow);
+      chunk.forEach(({ id }, i) => {
+        const col = i - (chunk.length - 1) / 2;
+        out.set(id, { row, col, layer: l });
+        xOf.set(id, col);
+      });
+      row++;
+    }
+  }
+  return out;
+}

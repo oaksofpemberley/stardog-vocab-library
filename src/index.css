@@ -391,14 +391,87 @@ body {
 /* ── Graph ── */
 .graph-container { width: 100%; height: 100%; position: relative; }
 .graph-container svg { width: 100%; height: 100%; }
-.graph-tooltip {
-  position: absolute; padding: 8px 12px; border-radius: var(--radius-sm);
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  font-size: 0.78rem; pointer-events: none; box-shadow: var(--shadow-md);
-  z-index: 10;
-}
 
 /* ── Designer View ── */
+/* Shared by Graph View and Designer View (docs/graph-views.md) */
+.graph-toolbar {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 16px;
+  border-bottom: 1px solid var(--border); background: var(--bg-secondary); z-index: 5; flex-shrink: 0;
+}
+.graph-toolbar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.graph-toolbar-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.88rem; color: var(--text-primary); margin-right: auto; }
+.graph-find { position: relative; width: 280px; max-width: 100%; }
+.graph-find .input { padding-left: 30px; height: 32px; font-size: 0.82rem; }
+.graph-find-icon { position: absolute; left: 10px; top: 9px; color: var(--text-muted); pointer-events: none; }
+.graph-find-results {
+  position: absolute; top: 36px; left: 0; right: 0; z-index: 30; list-style: none; margin: 0; padding: 4px;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  max-height: 320px; overflow-y: auto;
+}
+.graph-find-results li { padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.82rem; display: flex; flex-direction: column; }
+.graph-find-results li.active { background: var(--accent-glow); }
+.graph-zoom { display: flex; gap: 2px; }
+.graph-scope { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); margin-right: auto; flex-wrap: wrap; }
+.graph-hops { display: inline-flex; gap: 2px; }
+.graph-toggles { display: flex; gap: 12px; flex-wrap: wrap; }
+.graph-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; user-select: none; }
+.graph-note { margin: 0; }
+.link-button { background: none; border: none; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.graph-stage { position: relative; flex: 1; min-height: 0; display: flex; }
+.graph-stage > svg { flex: 1; width: 100%; height: 100%; }
+.graph-canvas { background: var(--bg-primary); }
+.designer-detail.graph-detail { position: relative; top: auto; right: auto; bottom: auto; flex: 0 0 300px; height: 100%; }
+.graph-detail-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.graph-rel .designer-detail-rel-label { white-space: nowrap; }
+.graph-rel .designer-detail-rel-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-sans); color: var(--text-primary); }
+.graph-rel { width: 100%; background: none; border: none; text-align: left; cursor: pointer; font-family: var(--font-sans); border-radius: var(--radius-sm); }
+.graph-rel:hover { background: var(--bg-card-hover); }
+
+/* Graph View drawing */
+.edge { stroke: rgba(148,163,184,0.28); stroke-width: 1.4; }
+.edge-subclass { stroke: rgba(148,163,184,0.45); stroke-width: 1.2; }
+.edge-term { stroke-dasharray: 4 3; stroke-width: 1.4; stroke-opacity: 0.85; }
+.edge-pending { stroke-opacity: 0.4; }
+.edge.hl { stroke: var(--accent); stroke-width: 2.4; stroke-opacity: 1; }
+.edge-label { font: 600 8.5px var(--font-sans); fill: var(--text-muted); display: none; pointer-events: none; }
+.lod-near .edge-label { display: inline; }
+.node-label { font: 600 10.5px var(--font-sans); fill: var(--text-secondary); pointer-events: none; paint-order: stroke; stroke: var(--bg-primary); stroke-width: 3px; }
+.lod-far .gnode:not(.keep):not(.selected) .node-label { display: none; }
+.lod-far .gnode-term:not(.keep) { display: none; }
+.gnode.selected .gnode-ring { stroke: var(--accent); stroke-width: 4; fill-opacity: 0.35; }
+.gnode.selected .node-label { fill: var(--text-primary); font-size: 12px; }
+.term-badge circle { fill: var(--accent); stroke: var(--bg-primary); stroke-width: 2; }
+.term-badge text { fill: #fff; font: 700 9.5px var(--font-sans); pointer-events: none; }
+.term-pill { fill-opacity: 0.16; stroke-width: 1.2; }
+.term-label { font: 600 9.5px var(--font-sans); fill: var(--text-primary); pointer-events: none; }
+.gnode-term { cursor: pointer; }
+.term-pending .term-pill, .gnode-term.term-pending { opacity: 0.6; }
+.term-pending .term-pill { stroke-dasharray: 3 2; }
+.term-more { font: 600 9.5px var(--font-sans); fill: var(--text-muted); }
+.term-link { fill: none; stroke-dasharray: 4 3; stroke-width: 1.3; }
+
+/* Designer View drawing */
+.dedge { fill: none; stroke: var(--text-muted); stroke-width: 1.5; opacity: 0.6; }
+.dedge-subclass { stroke: var(--text-secondary); stroke-width: 1.2; opacity: 0.45; }
+.dedge.hl { stroke: var(--accent); stroke-width: 2.6; opacity: 1; }
+.dedge-label { font: 600 10px var(--font-sans); fill: var(--text-secondary); }
+.edge-label-group { display: none; }
+.lod-near .edge-label-group { display: inline; }
+.dnode.selected .dnode-ring { stroke: var(--accent); stroke-width: 5; }
+.lod-far .dnode .term-label, .lod-far .dnode .term-more { display: none; }
+
+/* Legend (Graph View) */
+.graph-legend {
+  position: absolute; bottom: 12px; left: 12px; z-index: 10; max-width: 60%;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md); font-size: 0.72rem; color: var(--text-secondary);
+}
+.graph-legend-head { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: none; border: none; color: inherit; font: 600 0.72rem var(--font-sans); cursor: pointer; }
+.graph-legend-body { display: flex; gap: 12px; flex-wrap: wrap; padding: 4px 12px 8px; }
+.legend-item { display: inline-flex; align-items: center; gap: 4px; }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.legend-pill { width: 18px; height: 9px; border-radius: 5px; border: 1.5px dashed; display: inline-block; }
+
 .designer-view {
   height: 100%; position: relative; display: flex; flex-direction: column;
   overflow: hidden; background: var(--bg-primary);
@@ -409,37 +482,9 @@ body {
     radial-gradient(circle, var(--border) 1px, transparent 1px);
   background-size: 24px 24px;
 }
-.designer-toolbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary); z-index: 5; flex-shrink: 0;
-}
-.designer-toolbar-title {
-  display: flex; align-items: center; gap: 8px;
-  font-weight: 700; font-size: 0.88rem; color: var(--text-primary);
-}
 .designer-count {
   font-weight: 400; font-size: 0.75rem; color: var(--text-muted);
   margin-left: 4px;
-}
-.designer-tooltip {
-  position: absolute; z-index: 20; pointer-events: none;
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  border-radius: var(--radius-md); padding: 10px 14px;
-  box-shadow: var(--shadow-lg); min-width: 160px;
-  backdrop-filter: blur(12px);
-}
-.designer-tooltip-label {
-  font-weight: 700; font-size: 0.88rem; color: var(--text-primary);
-  margin-bottom: 2px;
-}
-.designer-tooltip-uri {
-  font-family: var(--font-mono); font-size: 0.72rem;
-  color: var(--text-tertiary); margin-bottom: 6px;
-}
-.designer-tooltip-meta {
-  display: flex; align-items: center; gap: 8px; font-size: 0.75rem;
-  color: var(--text-secondary);
 }
 .designer-detail {
   position: absolute; top: 52px; right: 0; bottom: 0; width: 300px;
@@ -679,3 +724,4 @@ body {
   .help-article { padding: 20px 16px 40px; }
 }
 .list-cap-note { margin: 4px 12px 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--info-bg); color: var(--info); font-size: 0.75rem; }
+.dnode .term-label { font-size: 11.5px; }

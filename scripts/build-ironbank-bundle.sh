@@ -7,6 +7,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# The Iron Bank image uses the same nginx configuration as the main image
+cp deploy/nginx.conf deploy/stardog-upstream.conf ironbank/
+
 npm ci --no-audit --no-fund
 VITE_STARDOG_ENDPOINT=/stardog npx vite build
 
