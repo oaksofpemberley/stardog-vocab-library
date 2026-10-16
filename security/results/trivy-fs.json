@@ -3,16 +3,16 @@
   "Trivy": {
     "Version": "0.75.0"
   },
-  "ReportID": "01a146c9-e9ae-7407-bbd6-873b82c26c78",
-  "CreatedAt": "2026-10-16T17:16:40.110265-05:00",
-  "ArtifactID": "sha256:0a443136af1f644701739a8c5e99c1ffef054cc33f79c0daa6874c4147d2eeff",
+  "ReportID": "01a146e4-33b2-7641-82a7-5b6dec7a1bbc",
+  "CreatedAt": "2026-10-16T17:45:22.994411-05:00",
+  "ArtifactID": "sha256:faf71012ca792f8fed1fd047d5d59750e5dde20a921f879e82c1dec50ac01ad1",
   "ArtifactName": ".",
   "ArtifactType": "repository",
   "Metadata": {
     "RepoURL": "https://github.com/oaksofpemberley/stardog-vocab-library.git",
     "Branch": "main",
-    "Commit": "15595f7a03f089d3e9081915b681396bc5740742",
-    "CommitMsg": "Review only one group's new terms together; explain Iron Bank status\n\nA batch id is just data: anyone who can write the governance graph could tag\nanother proposal with it, hide it in a bulk-add card and get it applied by\n\"Approve all\" without the other group's owner. The queue now groups only\n\"Add term\" proposals for one group by one proposer, and reviewProposals\nrefuses any other combination.\n\ndocs/security-scans.md: what Iron Bank's pipeline runs, which of it the\nscan script reproduces, and what an Iron Bank submission still lacks\n(approved base, hardening_manifest.yaml, LICENSE file).\n\nCo-Authored-By: Claude Opus 5.5 \u003cnoreply@anthropic.com\u003e",
+    "Commit": "60d52099eac3823f3e54226ce6af07ac05d58b5a",
+    "CommitMsg": "Graph and Designer View: hierarchy, Find, Focus, details, and group terms\n\n- Both views draw rdfs:subClassOf as well as object properties, and only\n  ontology classes (SKOS concepts no longer appear as stray dots).\n- Find a class by name or IRI; Focus shows 1-3 links around a class (kept in\n  the URL); Show all; switches for hierarchy, group terms, unconnected and\n  deprecated classes; zoom buttons and fit; names and arrow labels by zoom.\n- Large ontologies open at the top of the class hierarchy instead of drawing\n  everything. Graph View settles big layouts before drawing; Designer View\n  layers by the hierarchy and wraps rows at 12 classes.\n- A shared details panel (status, Focus here, Open in Explorer, clickable\n  relationships, properties) lists the groups' terms that reference the class,\n  and with \"Group terms\" on those terms are drawn beside each class.\n- Spec and measurements in docs/graph-views.md; Help and README updated.\n\nCo-Authored-By: Claude Opus 5.5 \u003cnoreply@anthropic.com\u003e",
     "Author": "Ron Synakowski \u003cronnie.synakowski@stardog.com\u003e",
     "Committer": "Ron Synakowski \u003cronnie.synakowski@stardog.com\u003e"
   },
@@ -1761,6 +1761,15 @@
     },
     {
       "Target": "Dockerfile",
+      "Class": "config",
+      "Type": "dockerfile",
+      "MisconfSummary": {
+        "Successes": 27,
+        "Failures": 0
+      }
+    },
+    {
+      "Target": "ironbank/Dockerfile",
       "Class": "config",
       "Type": "dockerfile",
       "MisconfSummary": {
