@@ -3,18 +3,18 @@
   "Trivy": {
     "Version": "0.75.0"
   },
-  "ReportID": "01a146a8-7f89-7975-812d-834cdbab6c08",
-  "CreatedAt": "2026-10-16T16:40:10.249621-05:00",
-  "ArtifactID": "sha256:ea865af12b1abc830bbb33a89a7d3bc564db873db3eb1373025ddd638f958232",
+  "ReportID": "01a146ca-1968-7870-9b05-bcbdeb6aaed0",
+  "CreatedAt": "2026-10-16T17:16:52.328555-05:00",
+  "ArtifactID": "sha256:fae44167142b07ac17a069c5a68cb075cee2cbe8d3add20c7767a18d987fa359",
   "ArtifactName": "vocab-library:scan-amd64",
   "ArtifactType": "container_image",
   "Metadata": {
-    "Size": 22415360,
+    "Size": 22441472,
     "OS": {
       "Family": "wolfi",
       "Name": "20230201"
     },
-    "ImageID": "sha256:209c47212f2cc1af814e1b0e313f8d27131e05651a31f69bbe0c8f2ac30262a6",
+    "ImageID": "sha256:78e32fc78ce64f4c2055b1c2cc4a030445e2b6226d4bb0034cc2fe35546ccd94",
     "DiffIDs": [
       "sha256:f6096ec873fd32fa7469d31ab13b49e5fabe82dac651ff1a0b01399f9e98e0f6",
       "sha256:bc462ca423e1b98144b799711df596605d84d7803b43e8b2810a9b5f322a6906",
@@ -29,19 +29,19 @@
       "sha256:8ca5cdacbf016aed65addf6e66771dfe3916a9b67e24e8e53dc22cd36dbf2697",
       "sha256:b93f8402b37c6aa6e90fc827f8c53968ac6c901f9ee79f471944108514840c8b",
       "sha256:040e53ea04b968af85df7b69d6e4c6a9dcd970c0436736de0b0c31fa9fbc229d",
-      "sha256:dab3b0a9d001c9d7fded0db5cf6d5e8603d0a6fc6d7bc38fc36d94ad71743076"
+      "sha256:dfed4997169d5ac098af878921a0330dce81e97503679fb790549a685e7da8ad"
     ],
     "RepoTags": [
       "vocab-library:scan-amd64"
     ],
     "RepoDigests": [
-      "vocab-library@sha256:209c47212f2cc1af814e1b0e313f8d27131e05651a31f69bbe0c8f2ac30262a6"
+      "vocab-library@sha256:78e32fc78ce64f4c2055b1c2cc4a030445e2b6226d4bb0034cc2fe35546ccd94"
     ],
     "Reference": "vocab-library:scan-amd64",
     "ImageConfig": {
       "architecture": "amd64",
       "author": "github.com/chainguard-dev/apko",
-      "created": "2026-10-16T21:39:15.32571267Z",
+      "created": "2026-10-16T22:16:46.881250088Z",
       "history": [
         {
           "created": "2026-10-11T22:55:20Z",
@@ -109,24 +109,24 @@
           "comment": "buildkit.dockerfile.v0"
         },
         {
-          "created": "2026-10-16T21:39:15Z",
+          "created": "2026-10-16T22:16:46Z",
           "created_by": "COPY /app/dist /usr/share/nginx/html # buildkit",
           "comment": "buildkit.dockerfile.v0"
         },
         {
-          "created": "2026-10-16T21:39:15Z",
+          "created": "2026-10-16T22:16:46Z",
           "created_by": "USER 65532",
           "comment": "buildkit.dockerfile.v0",
           "empty_layer": true
         },
         {
-          "created": "2026-10-16T21:39:15Z",
+          "created": "2026-10-16T22:16:46Z",
           "created_by": "EXPOSE [8080/tcp]",
           "comment": "buildkit.dockerfile.v0",
           "empty_layer": true
         },
         {
-          "created": "2026-10-16T21:39:15Z",
+          "created": "2026-10-16T22:16:46Z",
           "created_by": "HEALTHCHECK {Test:[CMD /usr/sbin/nginx -t -q -e /dev/stderr] Interval:30s Timeout:5s StartPeriod:0s StartInterval:0s Retries:0}",
           "comment": "buildkit.dockerfile.v0",
           "empty_layer": true
@@ -149,7 +149,7 @@
           "sha256:8ca5cdacbf016aed65addf6e66771dfe3916a9b67e24e8e53dc22cd36dbf2697",
           "sha256:b93f8402b37c6aa6e90fc827f8c53968ac6c901f9ee79f471944108514840c8b",
           "sha256:040e53ea04b968af85df7b69d6e4c6a9dcd970c0436736de0b0c31fa9fbc229d",
-          "sha256:dab3b0a9d001c9d7fded0db5cf6d5e8603d0a6fc6d7bc38fc36d94ad71743076"
+          "sha256:dfed4997169d5ac098af878921a0330dce81e97503679fb790549a685e7da8ad"
         ]
       },
       "config": {
@@ -264,9 +264,9 @@
         "DiffID": "sha256:040e53ea04b968af85df7b69d6e4c6a9dcd970c0436736de0b0c31fa9fbc229d"
       },
       {
-        "Size": 2619392,
-        "Digest": "sha256:62503d5a759e655d8da6ecad899d7155ec84e79669f867ddcd88b90c4013f098",
-        "DiffID": "sha256:dab3b0a9d001c9d7fded0db5cf6d5e8603d0a6fc6d7bc38fc36d94ad71743076"
+        "Size": 2645504,
+        "Digest": "sha256:eca4f07844fac0a9a2db1fa0cd59207833f018d0be21107914ec4bb672e0b6e3",
+        "DiffID": "sha256:dfed4997169d5ac098af878921a0330dce81e97503679fb790549a685e7da8ad"
       }
     ]
   },

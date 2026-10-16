@@ -3,16 +3,16 @@
   "Trivy": {
     "Version": "0.75.0"
   },
-  "ReportID": "01a146a8-7185-770c-9191-decfb54bd277",
-  "CreatedAt": "2026-10-16T16:40:06.661463-05:00",
-  "ArtifactID": "sha256:322a084fd92111e1c9633d50193f6c85a1b7b82963c63ab76b91aa79303825c5",
+  "ReportID": "01a146c9-e9ae-7407-bbd6-873b82c26c78",
+  "CreatedAt": "2026-10-16T17:16:40.110265-05:00",
+  "ArtifactID": "sha256:0a443136af1f644701739a8c5e99c1ffef054cc33f79c0daa6874c4147d2eeff",
   "ArtifactName": ".",
   "ArtifactType": "repository",
   "Metadata": {
     "RepoURL": "https://github.com/oaksofpemberley/stardog-vocab-library.git",
     "Branch": "main",
-    "Commit": "77629a3e7aee51d935fa67a389f72d8cadc339f9",
-    "CommitMsg": "Add a reproducible security scan script and a guide for reviewers\n\nscripts/security-scan.sh runs gitleaks over the git history, trivy and npm\naudit over the source, hadolint on the Dockerfile, and syft + grype + trivy\non the image for amd64 and arm64, then writes a summary.\n\nCo-Authored-By: Claude Opus 5.5 \u003cnoreply@anthropic.com\u003e",
+    "Commit": "15595f7a03f089d3e9081915b681396bc5740742",
+    "CommitMsg": "Review only one group's new terms together; explain Iron Bank status\n\nA batch id is just data: anyone who can write the governance graph could tag\nanother proposal with it, hide it in a bulk-add card and get it applied by\n\"Approve all\" without the other group's owner. The queue now groups only\n\"Add term\" proposals for one group by one proposer, and reviewProposals\nrefuses any other combination.\n\ndocs/security-scans.md: what Iron Bank's pipeline runs, which of it the\nscan script reproduces, and what an Iron Bank submission still lacks\n(approved base, hardening_manifest.yaml, LICENSE file).\n\nCo-Authored-By: Claude Opus 5.5 \u003cnoreply@anthropic.com\u003e",
     "Author": "Ron Synakowski \u003cronnie.synakowski@stardog.com\u003e",
     "Committer": "Ron Synakowski \u003cronnie.synakowski@stardog.com\u003e"
   },
