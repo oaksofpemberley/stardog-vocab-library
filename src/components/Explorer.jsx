@@ -5,9 +5,12 @@ import TermDetail from './TermDetail';
 import SearchBar from './SearchBar';
 import { toPrefixed } from '../lib/sparql';
 import { readHash, updateHash } from '../lib/urlState';
+import { useCommunityData } from '../lib/useCommunityData';
 
 export default function Explorer() {
   const { classes, properties } = useStardog();
+  // Groups, terms and mappings, for the term page's links and edit forms (loaded once, not per term)
+  const community = useCommunityData();
   // Selection, search and filter live in the URL hash so a refresh keeps them
   const [selectedTerm, setSelectedTerm] = useState(() => readHash().get('term'));
   const [searchQuery, setSearchQuery] = useState(() => readHash().get('q') || '');
@@ -67,7 +70,7 @@ export default function Explorer() {
         {/* Center: Term detail */}
         <div className="panel-center split-panel" style={{ padding: 20 }}>
           {selected ? (
-            <TermDetail term={selected} key={selected.uri} />
+            <TermDetail term={selected} key={selected.uri} community={community} />
           ) : (
             <div className="empty-state" style={{ height: '100%' }}>
               <BookOpenIcon />

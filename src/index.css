@@ -554,6 +554,28 @@ body {
 .concept-list { margin: 8px 0 0; display: flex; flex-direction: column; gap: 8px; }
 .concept-list dt { font-weight: 700; font-size: 0.84rem; }
 .concept-list dd { margin: 2px 0 0; font-size: 0.8rem; color: var(--text-secondary); }
+.concept-list dt { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.concept-actions { display: inline-flex; gap: 2px; font-weight: 400; }
+.concept-links { display: flex; flex-wrap: wrap; gap: 4px; }
+.link-chip {
+  padding: 1px 8px; border-radius: 999px; font-size: 0.72rem;
+  background: var(--success-bg); color: var(--text-primary); border: 1px solid transparent;
+}
+.link-chip.link-pending { background: transparent; border-color: var(--warning); }
+.link-chip.link-asserted { background: var(--accent-glow); }
+.group-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.btn-xs { padding: 2px 6px; font-size: 0.72rem; gap: 3px; }
+
+/* Term references (R9) and bulk add (R8) */
+.ref-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ref-row { display: flex; align-items: center; gap: 10px; font-size: 0.84rem; flex-wrap: wrap; }
+.ref-term { flex: 1; min-width: 0; }
+.ref-relation { font-size: 0.76rem; color: var(--text-secondary); white-space: nowrap; }
+.batch-terms { margin: 6px 0; padding-left: 18px; font-size: 0.82rem; display: flex; flex-direction: column; gap: 2px; }
+.modal.modal-wide { width: 860px; }
+.bulk-preview { max-height: 300px; overflow-y: auto; }
+.bulk-preview .row-error td { color: var(--text-muted); }
+.textarea.mono { font-family: var(--font-mono); font-size: 0.78rem; }
 
 .shared-list { padding: 8px 0; overflow-y: auto; }
 .shared-list-head { padding: 8px 16px 12px; font-size: 0.78rem; color: var(--text-muted); }

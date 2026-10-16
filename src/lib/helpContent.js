@@ -188,7 +188,7 @@ export const HELP_ARTICLES = [
       ] },
       { type: 'h', text: 'The three tabs' },
       { type: 'table', head: ['Tab', 'Shows'], rows: [
-        ['Overview', 'Type, namespace, instance count, properties (with their type and range), SHACL constraints that target the class, and the full URI. For a property: the classes that use it.'],
+        ['Overview', 'Type, namespace, instance count, **Vocabulary terms that reference this** (terms from any group mapped to it), properties (with their type and range), SHACL constraints that target the class, and the full URI. For a group\'s term, also its links to the ontology. For a property: the classes that use it.'],
         ['Governance', 'Status, steward, editorial notes and recent activity. See "Status, stewards and notes".'],
         ['Impact', 'What depends on this term. See "Impact analysis".'],
       ] },
@@ -202,7 +202,7 @@ export const HELP_ARTICLES = [
       { type: 'cannot', items: [
         'List terms typed only as `rdfs:Class` or `rdf:Property`, or annotation properties.',
         'List terms from standard vocabularies (RDF, RDFS, OWL, XSD, SKOS, Dublin Core terms at `http://purl.org/dc/terms/`, and schema.org at `https://schema.org/`) or the app\'s own governance terms. Dublin Core elements (`dc/elements/1.1/`) and `http://schema.org/` are still listed. They are hidden on purpose, even when loaded (for example in the Voicebox schema graph). A vocabulary you defined inside one of those namespaces, such as your own schema.org extension terms, is hidden too.',
-        'Edit a term directly. Changes go through a proposal in the Review Queue.',
+        'Edit a term directly. Changes go through a proposal in the Review Queue. A group\'s term (SKOS concept) has **Edit** and **Link to ontology** buttons at the top of its page that start that proposal for you.',
         'Show the class hierarchy (subclasses) or reasoning results. The app reads asserted data only.',
         'Show instance counts for every class on very large databases: counts are loaded for the 100 most-used types, and none are shown if counting takes more than 30 seconds.',
         'List more than 1,500 terms at once. A note says how many more there are; search and the status filter still cover every term.',
@@ -222,7 +222,7 @@ export const HELP_ARTICLES = [
       { type: 'table', head: ['', 'Graph View', 'Designer View'], rows: [
         ['Layout', 'Force-directed; drag a node to pull the layout around (it settles back when you let go)', 'Layered from top to bottom, computed for you'],
         ['Colours', 'One colour per namespace (collapsible legend, bottom left)', 'One colour per class; badge shows property count'],
-        ['Extras', 'Hide or show deprecated and retired classes', 'Click a class to see its details'],
+        ['Extras', 'Hide or show deprecated and retired classes', 'Click a class to see its details, including the vocabulary terms that reference it'],
         ['Navigation', 'Scroll to zoom, drag the background to pan', 'Scroll to zoom, drag the background to pan'],
       ] },
       { type: 'story', title: 'Story: explaining the model to a new analyst', text: 'Priya opens Designer View in a meeting: Customer at the top, Order and Product below, Shipment at the bottom. The arrows read like sentences ("Order containsProduct Product"). The deprecated LegacySku class has an orange ring, so nobody builds a report on it.' },
@@ -244,10 +244,19 @@ export const HELP_ARTICLES = [
     section: 'Communities',
     title: 'Groups and owners',
     summary: 'Each SKOS concept scheme is a group with an owner, a description, its concepts and its mappings.',
-    keywords: ['community', 'concept scheme', 'owner', 'team', 'skos', 'assign owner', 'dct:creator'],
-    related: ['shared-terms', 'mappings', 'concepts'],
+    keywords: ['community', 'concept scheme', 'owner', 'team', 'skos', 'assign owner', 'dct:creator', 'add term', 'new term', 'create term', 'edit term', 'bulk add', 'csv', 'import terms', 'link to ontology'],
+    related: ['shared-terms', 'mappings', 'review-queue', 'concepts'],
     body: [
-      { type: 'p', text: 'Every `skos:ConceptScheme` in the database becomes a card on the Groups page with its label, description, number of concepts and number of mappings that involve it (every status, including pending, rejected and retired). **Show concepts** lists every concept with its definition and alternative labels.' },
+      { type: 'p', text: 'Every `skos:ConceptScheme` in the database becomes a card on the Groups page with its label, description, number of concepts and number of mappings that involve it (every status, including pending, rejected and retired). **Show terms** lists every concept with its definition, alternative labels and links to the ontology.' },
+      { type: 'h', text: 'Adding and editing a group\'s terms' },
+      { type: 'p', text: 'A term is a word the group uses. It is not an ontology class: groups can name the same concept differently and point to one shared ontology instead of each building their own. Every change below is a proposal: nothing changes until someone approves it in the Review Queue (and, if "Require group owners to approve" is on, the group\'s owner).' },
+      { type: 'list', items: [
+        '**Add term** (on the group card): label, optional definition, and an IRI suggested from the group\'s namespace and the label (you can change it). The form refuses an IRI that another term already uses, or that a pending "Add term" proposal would create, and a label the group already has. If another group uses the same label, it says so; that is allowed.',
+        '**Bulk add**: paste rows or open a `.csv`, `.tsv` or `.txt` file with the columns `label`, `definition`, `iri` (a header row in any order is recognised; definition and IRI are optional). A preview marks each row **new**, **also used by** another group, or **not sent** with the reason (no label, invalid IRI, IRI already used or already pending, label already in this group, or repeated in the list). At most 500 terms at a time. The valid rows become one batch of "Add term" proposals, created together in one request, with an optional note for reviewers.',
+        '**Edit** (beside each term under **Show terms**, or on the term\'s page in the Explorer): the form starts with the current label and definition, and only what you change is proposed.',
+        '**Link to ontology** (same places): proposes a mapping from the term to an ontology class (`owl:Class`), with a relation and a justification. Only ontology classes are offered. Linking is optional and can be done any time after the term exists. Under **Show terms**, each term lists its links ("close match → Simulation Model", "(pending)" until approved) or "Not linked to the ontology yet".',
+      ] },
+      { type: 'story', title: 'Story: the test team\'s glossary', text: 'The Test & Evaluation lead has a spreadsheet of 40 terms from the test plan. They save it as CSV and use **Bulk add**. The preview shows 37 new terms, 2 marked "also used by Systems Engineering" (fine: the teams mean different things), and 1 not sent because the group already has it. A reviewer approves the batch with one click, and the terms appear in the group. Over the next weeks the team links the important ones to the digital-thread classes with **Link to ontology**.' },
       { type: 'h', text: 'Owners' },
       { type: 'list', items: [
         'Pick the owner type first. It starts on **Stardog account**: type the account name (suggestions appear where your account may list users; most accounts can only see themselves). To record a person or team that is not a Stardog account, switch it to **Name**. Then click **Assign**. This takes effect immediately (no review) and is written to the audit log.',
@@ -262,9 +271,12 @@ export const HELP_ARTICLES = [
       { type: 'can', items: [
         'Show any number of groups, loaded from any named graphs in the database.',
         'Record and change an owner for each group, with an audit trail.',
+        'Add terms to a group one at a time or in bulk from pasted rows or a CSV/TSV file, edit their labels and definitions, and link them to ontology classes, all through review.',
       ] },
       { type: 'cannot', items: [
         'Create a new group or move a concept to another group. Load or edit the SKOS data in Stardog.',
+        'Add alternative labels to a new term, or bulk add from a SKOS/RDF file (for example one exported from another vocabulary editor). Bulk add reads CSV/TSV text; load RDF files with Stardog Studio.',
+        'Update existing terms in bulk. Bulk add only creates new terms; edit existing ones one at a time.',
         'Treat an OWL ontology as a group. Groups are SKOS concept schemes only.',
         'Protect ownership while owner approval is off. Then anyone who can use the app can reassign any group.',
         'Have the owner-approval rule itself enforced by Stardog. It is a rule the app enforces. To have Stardog block writes to a group\'s vocabulary, use named-graph security (see "Secured demo: Stardog enforces ownership").',
@@ -307,7 +319,7 @@ export const HELP_ARTICLES = [
     keywords: ['exact match', 'close match', 'broad match', 'narrow match', 'related match', 'skos', 'relation', 'retire mapping', 'remove mapping', 'unmap', 'crosswalk', 'alignment'],
     related: ['shared-terms', 'review-queue', 'data-storage'],
     body: [
-      { type: 'p', text: 'A mapping says how a term in one group relates to a term in another, **without changing either term**. It is stored as one SKOS triple, so any SPARQL query can follow it, and so can Voicebox once the database is set up for it (see the quick start).' },
+      { type: 'p', text: 'A mapping says how a term in one group relates to a term in another group, or to an ontology class, **without changing either one**. It is stored as one SKOS triple, so any SPARQL query can follow it, and so can Voicebox once the database is set up for it (see the quick start).' },
       { type: 'h', text: 'Choosing a relation' },
       { type: 'table', head: ['Relation', 'Means', 'Example'], rows: [
         ['exact match', 'Interchangeable in any context.', 'Physics "metre" ↔ Engineering "meter".'],
@@ -326,6 +338,8 @@ export const HELP_ARTICLES = [
         ['retired', 'Was approved, then removed through review. Kept as history.'],
       ] },
       { type: 'p', text: 'Each row shows the justification, who proposed it and who reviewed it. Filter by status with the buttons above the table.' },
+      { type: 'h', text: 'Linking terms to the ontology' },
+      { type: 'p', text: 'A link from a group\'s term to an ontology class is a mapping like any other: same relations, same review, stored in `VOCAB:MAPPINGS`. Start it with **Link to ontology** on the Groups page or on the term\'s page. To see every term that points at a class, open the class in the Explorer (**Vocabulary terms that reference this**) or select it in Designer View. Each term is listed with its group, the relation read from the term\'s side, and whether the link is approved, asserted or pending; rejected and retired links are left out.' },
       { type: 'h', text: 'Retiring a mapping' },
       { type: 'steps', items: [
         'On an **approved** row, click **Propose removal** and give a reason (required).',
@@ -334,7 +348,8 @@ export const HELP_ARTICLES = [
       ] },
       { type: 'story', title: 'Story: a mapping that stopped being true', text: 'Last year CS and Business agreed "model" was a close match. This year Business started using "model" for spreadsheet templates. Dana proposes removing the mapping with the reason "Business \'model\' now means a spreadsheet template". After review, the mapping disappears from queries, but the Mappings page still shows that it existed, why it was made and why it was removed.' },
       { type: 'can', items: [
-        'Map any two concepts in different groups, with any of the five SKOS relations.',
+        'Map any two concepts in different groups, or a concept to an ontology class, with any of the five SKOS relations.',
+        'List, for any class or concept, the terms from every group that reference it.',
         'Keep a full history: who proposed, who approved, why, and why a mapping was retired.',
       ] },
       { type: 'cannot', items: [
@@ -388,9 +403,9 @@ export const HELP_ARTICLES = [
     keywords: ['proposal', 'propose', 'approve', 'reject', 'review', 'change request', 'workflow', 'add term', 'modify term', 'rename', 'deprecate term', 'apply'],
     related: ['governance', 'mappings', 'audit-log'],
     body: [
-      { type: 'p', text: 'Use **New Proposal** to request a change. Nothing changes until someone approves it; then the app applies the change, marks the proposal approved and writes the audit entry **in one request**, so either all of it happens or none of it does.' },
+      { type: 'p', text: 'Use **New Proposal** to request a change, or start one where you work: **Add term**, **Bulk add**, **Edit** and **Link to ontology** on the Groups page and on a term\'s page open the same form already filled in. Nothing changes until someone approves it; then the app applies the change, marks the proposal approved and writes the audit entry **in one request**, so either all of it happens or none of it does.' },
       { type: 'table', head: ['Proposal type', 'You fill in', 'Approving it'], rows: [
-        ['Add term', 'Group, label, definition, IRI (suggested for you)', 'Creates a new SKOS concept in that group\'s graph.'],
+        ['Add term', 'Group, label, definition, IRI (suggested for you)', 'Creates a new SKOS concept in that group\'s graph. Bulk add creates one such proposal per row.'],
         ['Modify term', 'Term, new label and/or new definition', 'Replaces the label/definition in the term\'s own graph.'],
         ['Deprecate term', 'Term', 'Sets status Deprecated and writes `owl:deprecated true`.'],
         ['Map terms', 'Source, relation, target, justification', 'Writes the mapping to `VOCAB:MAPPINGS`.'],
@@ -401,6 +416,7 @@ export const HELP_ARTICLES = [
         'Each pending card shows what approving will change, the description and who proposed it.',
         'Click **Review**, write a comment (required to reject, optional to approve), and click **Approve** or **Reject**.',
         'If owner approval is required, the card shows **Needs approval from** with one chip per owner (for example "Physics: alice ✓ approved", "Business Administration: biz_owner (waiting)"). Only those accounts get a Review button. Everyone else, including the shared account when you have not signed in, sees "Only X and Y can review this". "Sign in with a Stardog account to review" appears only when the app cannot tell which account is in use. An owner who has approved waits for the others; the change applies when the last one approves.',
+        'A bulk add shows as one card, marked **Bulk add** ("3 terms to Test & Evaluation"), listing its terms (the first 8, then **Show all**). **Review all** approves or rejects every term in it in one request, so either all are added or none. **One by one** opens a card per term instead.',
         'Resolved proposals move to **Resolved**. An "applied" badge means the change was written to the vocabulary.',
       ] },
       { type: 'story', title: 'Story: a rename that went through review', text: 'The reporting team asks for "Shipment" to be relabelled "Outbound Shipment". Sam opens a **Modify term** proposal with the new label and the reason. Priya, the steward, checks Impact, approves with the comment "No downstream label matching, safe". The label changes in Stardog at that moment, the Explorer reloads, and the Audit Log shows both Sam\'s proposal and Priya\'s approval.' },
@@ -540,7 +556,8 @@ export const HELP_ARTICLES = [
         'Record lifecycle status, stewards, group owners and notes, with an audit entry naming the person and the Stardog account the app was signed in as.',
         'Require group owners (Stardog accounts) to approve changes to their group, when a database turns that on.',
         'Work with Stardog named-graph security, so Stardog itself refuses changes to a group\'s vocabulary or to mappings from accounts not allowed to write them, even outside the app.',
-        'Run changes through proposal and review, and apply them to Stardog on approval: add SKOS concepts, change labels and definitions, deprecate terms.',
+        'Run changes through proposal and review, and apply them to Stardog on approval: add SKOS concepts (one at a time or in bulk from CSV/TSV), change labels and definitions, deprecate terms.',
+        'Link groups\' terms to ontology classes, and list every term that references a class.',
         'Show where groups use the same or similar words differently, and record governed SKOS mappings between them, with full history.',
         'Show direct dependencies before a change, and vocabulary health metrics.',
         'Export the vocabulary as Turtle, JSON-LD or CSV.',
@@ -548,7 +565,7 @@ export const HELP_ARTICLES = [
       ] },
       { type: 'h', text: 'It can\'t' },
       { type: 'table', head: ['Not possible here', 'Do it with'], rows: [
-        ['Import or upload files', 'Stardog Studio, Designer, or `stardog data add`'],
+        ['Import RDF files (Turtle, SKOS exports); bulk add takes CSV/TSV of new terms only', 'Stardog Studio, Designer, or `stardog data add`'],
         ['Create or delete databases', 'Stardog Studio or `stardog-admin db create`'],
         ['Delete a term or change its IRI', 'A SPARQL update in Studio (then record why in a note)'],
         ['Add or edit OWL classes, properties, hierarchy, domains/ranges', 'Stardog Designer or an ontology editor'],

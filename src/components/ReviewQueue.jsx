@@ -1,43 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStardog } from '../contexts/StardogContext';
-import { fetchProposals, createProposal, reviewProposal, hasStructuredChange } from '../lib/governance';
-import { toPrefixed, getNamespace } from '../lib/sparql';
-import { MAPPING_RELATIONS, relationLabel } from '../lib/communities';
+import { fetchProposals, reviewProposals, hasStructuredChange, PROPOSAL_TYPE_LABEL as TYPE_LABEL } from '../lib/governance';
+import { toPrefixed } from '../lib/sparql';
+import { relationLabel } from '../lib/communities';
 import { useDraft } from '../lib/useDraft';
 import { useCommunityData } from '../lib/useCommunityData';
-import { ListChecks, Plus, Check, X, FileText } from 'lucide-react';
+import ProposalModal from './ProposalModal';
+import { ListChecks, Plus, Check, X, FileText, Layers, ChevronDown, ChevronRight } from 'lucide-react';
 
 const TYPE_BADGE = { add: 'draft', modify: 'review', deprecate: 'deprecated', mapping: 'active', unmap: 'retired' };
-const TYPE_LABEL = { add: 'Add term', modify: 'Modify term', deprecate: 'Deprecate term', mapping: 'Map terms', unmap: 'Remove mapping' };
-
-/** Suggested IRI for a new term: the group's namespace + the label in PascalCase */
-function suggestIri(schemeUri, label) {
-  if (!schemeUri || !label) return '';
-  const local = label.trim().split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('');
-  return local ? getNamespace(schemeUri) + local : '';
-}
 
 export default function ReviewQueue() {
   const { endpoint, db, token, connection, classes, refreshGovernance, loadOntology, identity } = useStardog();
   const actor = connection.username || 'anonymous';
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [reviewError, setReviewError] = useState(null);
 
-  // Unsent input survives a refresh (per database) until it is submitted
-  const EMPTY_PROPOSAL = {
-    open: false, type: 'modify', title: '', desc: '', termUri: '',
-    label: '', definition: '', scheme: '', iri: '', source: '', relation: MAPPING_RELATIONS[1].iri, target: '',
-  };
-  const [draft, setDraft] = useDraft(`${db}:proposal`, EMPTY_PROPOSAL);
+  // The form's unsent input (ProposalModal) and whether it is open survive a refresh, per database
+  const [showCreate, setShowCreate] = useDraft(`${db}:proposal-open`, false);
   const [review, setReview] = useDraft(`${db}:review`, { id: null, comment: '' });
-  const field = (name) => ({ value: draft[name] ?? '', onChange: (e) => setDraft(d => ({ ...d, [name]: e.target.value })) });
-  const setShowCreate = (open) => { setError(null); setDraft(d => ({ ...d, open })); };
   const setReviewingId = (id) => { setReviewError(null); setReview({ id, comment: '' }); };
+  const [expandedBatch, setExpandedBatch] = useState(null);
 
-  const terms = [...classes].sort((a, b) => (a.label || a.uri).localeCompare(b.label || b.uri));
-  const groups = classes.filter(c => c.type === 'skos:ConceptScheme');
   // Shared labels ("model" in three groups) are told apart by their group
   const community = useCommunityData();
   const termName = (uri) => {
@@ -57,33 +42,6 @@ export default function ReviewQueue() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch from Stardog on mount
   useEffect(() => { load(); }, [load]);
 
-  const handleCreate = async () => {
-    setError(null);
-    const d = draft;
-    const iri = d.type === 'add' ? (d.iri.trim() || suggestIri(d.scheme, d.label)) : '';
-    const isMap = d.type === 'mapping' || d.type === 'unmap';
-    const title = d.title.trim() || (isMap
-      ? `${d.type === 'unmap' ? 'Remove: ' : ''}${termName(d.source)} ${relationLabel(d.relation)} ${termName(d.target)}`
-      : d.type === 'add' ? `Add "${d.label}"` : `${TYPE_LABEL[d.type]}: ${termName(d.termUri)}`);
-    try {
-      await createProposal(endpoint, db, token, {
-        type: d.type, title, description: d.desc, proposedBy: actor,
-        termUri: d.type === 'modify' || d.type === 'deprecate' ? d.termUri : '',
-        proposedLabel: d.type === 'add' || d.type === 'modify' ? d.label.trim() : '',
-        proposedDefinition: d.type === 'add' || d.type === 'modify' ? d.definition.trim() : '',
-        proposedIri: iri, proposedScheme: d.type === 'add' ? d.scheme : '',
-        mappingSource: isMap ? d.source : '',
-        mappingRelation: isMap ? d.relation : '',
-        mappingTarget: isMap ? d.target : '',
-      });
-      setDraft(EMPTY_PROPOSAL);
-      await load();
-    } catch (e) {
-      console.error('[Vocab] Proposal creation failed:', e);
-      setError(`Failed to save proposal: ${e.message}`);
-    }
-  };
-
   /** Owner approval: who must approve this proposal, who has, and whether the current account may review */
   const approvalState = (p) => {
     const needed = community.approvalsNeeded(p);
@@ -97,18 +55,20 @@ export default function ReviewQueue() {
     };
   };
 
-  const handleReview = async (proposal, decision) => {
+  /** Review one proposal, or a whole batch in one request (all applied or none) */
+  const handleReview = async (list, decision) => {
     if (!review.comment.trim() && decision === 'rejected') { setReviewError('A comment is required to reject.'); return; }
     setReviewError(null);
     try {
-      const { required } = approvalState(proposal);
-      await reviewProposal(endpoint, db, token, proposal, decision, actor, review.comment || 'Approved',
+      // Every proposal in a batch touches the same group, so the same owners must approve
+      const { required } = approvalState(list[0]);
+      await reviewProposals(endpoint, db, token, list, decision, actor, review.comment || 'Approved',
         { requiredAccounts: required });
       setReview({ id: null, comment: '' });
       await refreshGovernance();
       await Promise.all([load(), community.reload()]);
       // An approved change may have edited the vocabulary itself: reload it
-      if (decision === 'approved' && hasStructuredChange(proposal) && proposal.type !== 'mapping') loadOntology();
+      if (decision === 'approved' && list.some(p => hasStructuredChange(p) && p.type !== 'mapping')) loadOntology();
     } catch (e) {
       console.error('[Vocab] Review failed:', e);
       setReviewError(`Review not saved: ${e.message}`);
@@ -117,6 +77,14 @@ export default function ReviewQueue() {
 
   const pending = proposals.filter(p => p.status === 'pending');
   const resolved = proposals.filter(p => p.status !== 'pending');
+  // A bulk add shows as one card (in the order of its newest proposal); everything else one card each
+  const cards = [];
+  const batches = new Map();
+  for (const p of pending) {
+    if (!p.batch) { cards.push({ key: p.id, items: [p] }); continue; }
+    if (!batches.has(p.batch)) { const card = { key: p.batch, batch: p.batch, items: [] }; batches.set(p.batch, card); cards.push(card); }
+    batches.get(p.batch).items.push(p);
+  }
 
   /** What approving this proposal will change (or changed) */
   const ChangeSummary = ({ p }) => {
@@ -147,109 +115,9 @@ export default function ReviewQueue() {
         </button>
       </div>
 
-      {/* Create Proposal Modal */}
-      {draft.open && (
-        <div className="modal-overlay" onClick={() => setShowCreate(false)}>
-          <div className="modal fade-in" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">New Change Proposal</div>
-            <div className="modal-subtitle">Nothing changes until a reviewer approves it.</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div className="form-group">
-                <label className="form-label">Type</label>
-                <select className="select" {...field('type')}>
-                  {Object.entries(TYPE_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-                </select>
-              </div>
-
-              {(draft.type === 'modify' || draft.type === 'deprecate') && (
-                <div className="form-group">
-                  <label className="form-label">Target Term</label>
-                  <select className="select" {...field('termUri')}>
-                    <option value="">Select a term...</option>
-                    {terms.map(c => <option key={c.uri} value={c.uri}>{termName(c.uri)}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {draft.type === 'add' && (
-                <div className="form-group">
-                  <label className="form-label">Group</label>
-                  <select className="select" {...field('scheme')}>
-                    <option value="">Select a group...</option>
-                    {groups.map(g => <option key={g.uri} value={g.uri}>{g.label || toPrefixed(g.uri)}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {(draft.type === 'add' || draft.type === 'modify') && (
-                <>
-                  <div className="form-group">
-                    <label className="form-label">{draft.type === 'add' ? 'Label' : 'New label (optional)'}</label>
-                    <input className="input" {...field('label')} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">{draft.type === 'add' ? 'Definition' : 'New definition (optional)'}</label>
-                    <textarea className="textarea" {...field('definition')} />
-                  </div>
-                </>
-              )}
-
-              {draft.type === 'add' && (
-                <div className="form-group">
-                  <label className="form-label">IRI</label>
-                  <input className="input" {...field('iri')} placeholder={suggestIri(draft.scheme, draft.label) || 'http://…'} />
-                </div>
-              )}
-
-              {(draft.type === 'mapping' || draft.type === 'unmap') && (
-                <>
-                  <div className="form-group">
-                    <label className="form-label">Source term</label>
-                    <select className="select" {...field('source')}>
-                      <option value="">Select a term...</option>
-                      {terms.map(c => <option key={c.uri} value={c.uri}>{termName(c.uri)}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Relation</label>
-                    <select className="select" {...field('relation')}>
-                      {MAPPING_RELATIONS.map(r => <option key={r.iri} value={r.iri}>{r.label}</option>)}
-                    </select>
-                    <span className="form-help">{MAPPING_RELATIONS.find(r => r.iri === draft.relation)?.help}</span>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Target term</label>
-                    <select className="select" {...field('target')}>
-                      <option value="">Select a term...</option>
-                      {terms.map(c => <option key={c.uri} value={c.uri}>{termName(c.uri)}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Title {draft.type !== 'modify' && <span className="muted">(optional)</span>}</label>
-                <input className="input" {...field('title')} placeholder="Brief description of the change" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">{draft.type === 'mapping' ? 'Justification (required)' : draft.type === 'unmap' ? 'Reason (required)' : 'Description'}</label>
-                <textarea className="textarea" {...field('desc')} placeholder="Detailed justification for this change..." />
-              </div>
-            </div>
-            {error && (
-              <div className="connection-status error" role="alert" style={{ marginTop: 12 }}>
-                ⚠️ {error}
-              </div>
-            )}
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleCreate}
-                disabled={draft.type === 'modify' && !draft.title.trim() && !draft.label.trim() && !draft.definition.trim()}>
-                Submit Proposal
-              </button>
-            </div>
-          </div>
-        </div>
+      {showCreate && (
+        <ProposalModal community={community} draftKey={`${db}:proposal`}
+          onClose={() => setShowCreate(false)} onCreated={() => Promise.all([load(), community.reload()])} />
       )}
 
       {/* Pending Proposals */}
@@ -259,7 +127,20 @@ export default function ReviewQueue() {
             Pending Review
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {pending.map(p => (
+            {cards.map(card => card.batch && card.items.length > 1 && expandedBatch !== card.batch ? (
+              <BatchCard key={card.key} items={card.items} state={approvalState(card.items[0])}
+                groupLabel={community.schemeLabel} onExpand={() => setExpandedBatch(card.batch)}
+                reviewing={review.id === card.batch} onStartReview={() => setReviewingId(card.batch)}
+                review={review} setReview={setReview} reviewError={reviewError} identity={identity}
+                onReview={(decision) => handleReview(card.items, decision)} />
+            ) : (
+              <div key={card.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {card.batch && card.items.length > 1 && (
+                  <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setExpandedBatch(null)}>
+                    <ChevronDown size={13} /> Bulk add: {card.items.length} terms to {community.schemeLabel(card.items[0].proposedScheme)} (review together)
+                  </button>
+                )}
+                {card.items.map(p => (
               <div key={p.id} className="card">
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div style={{ flex: 1 }}>
@@ -282,22 +163,14 @@ export default function ReviewQueue() {
                       {identity?.account ? `Only ${approvalState(p).required.join(' and ')} can review this` : 'Sign in with a Stardog account to review'}
                     </span>
                   ) : review.id === p.id ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 16, minWidth: 200 }}>
-                      <input className="input" placeholder="Review comment..." value={review.comment}
-                        onChange={e => setReview(r => ({ ...r, comment: e.target.value }))} />
-                      {reviewError && <div className="connection-status error" role="alert">{reviewError}</div>}
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-success btn-sm" onClick={() => handleReview(p, 'approved')} disabled={approvalState(p).alreadyApproved}
-                          title={approvalState(p).alreadyApproved ? 'You already approved; waiting for the other owner' : undefined}>
-                          <Check size={13} /> Approve
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleReview(p, 'rejected')}><X size={13} /> Reject</button>
-                      </div>
-                    </div>
+                    <ReviewForm review={review} setReview={setReview} reviewError={reviewError}
+                      alreadyApproved={approvalState(p).alreadyApproved} onReview={(decision) => handleReview([p], decision)} />
                   ) : (
                     <button className="btn btn-secondary btn-sm" onClick={() => setReviewingId(p.id)}>Review</button>
                   )}
                 </div>
+              </div>
+                ))}
               </div>
             ))}
           </div>
@@ -353,6 +226,74 @@ function ApprovalLine({ state, groupLabel }) {
           </span>
         );
       })}
+    </div>
+  );
+}
+
+/** Comment box with Approve / Reject (label says "all" for a batch) */
+function ReviewForm({ review, setReview, reviewError, alreadyApproved, onReview, count = 1 }) {
+  const all = count > 1 ? ` all ${count}` : '';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 16, minWidth: 200 }}>
+      <input className="input" placeholder="Review comment..." value={review.comment} aria-label="Review comment"
+        onChange={e => setReview(r => ({ ...r, comment: e.target.value }))} />
+      {reviewError && <div className="connection-status error" role="alert">{reviewError}</div>}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button className="btn btn-success btn-sm" onClick={() => onReview('approved')} disabled={alreadyApproved}
+          title={alreadyApproved ? 'You already approved; waiting for the other owner' : undefined}>
+          <Check size={13} /> Approve{all}
+        </button>
+        <button className="btn btn-danger btn-sm" onClick={() => onReview('rejected')}><X size={13} /> Reject{all}</button>
+      </div>
+    </div>
+  );
+}
+
+/** A bulk add, reviewed as one: lists its terms; approving applies them all in one request */
+function BatchCard({ items, state, groupLabel, onExpand, reviewing, onStartReview, review, setReview, reviewError, identity, onReview }) {
+  const first = items[0];
+  const [open, setOpen] = useState(false);
+  const shown = open ? items : items.slice(0, 8);
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span className="status-badge status-draft"><Layers size={11} style={{ verticalAlign: '-1px' }} /> Bulk add</span>
+            <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{items.length} terms to {groupLabel(first.proposedScheme)}</span>
+          </div>
+          <ul className="batch-terms">
+            {shown.map(p => (
+              <li key={p.id}><strong>{p.proposedLabel}</strong>{p.proposedDefinition && <span className="muted"> — {p.proposedDefinition}</span>}</li>
+            ))}
+          </ul>
+          {items.length > 8 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setOpen(!open)}>
+              {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {open ? 'Show fewer' : `Show all ${items.length}`}
+            </button>
+          )}
+          <ApprovalLine state={state} groupLabel={groupLabel} />
+          {first.description && <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '4px 0', whiteSpace: 'pre-wrap' }}>{first.description}</p>}
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
+            <span>by {first.proposedBy}</span>
+            <span>{new Date(first.date).toLocaleDateString()}</span>
+            {first.batchSize > items.length && <span>{first.batchSize - items.length} of the {first.batchSize} already reviewed</span>}
+          </div>
+        </div>
+        {!state.canReview ? (
+          <span className="muted" style={{ fontSize: '0.75rem', maxWidth: 200, textAlign: 'right' }}>
+            {identity?.account ? `Only ${state.required.join(' and ')} can review this` : 'Sign in with a Stardog account to review'}
+          </span>
+        ) : reviewing ? (
+          <ReviewForm review={review} setReview={setReview} reviewError={reviewError} count={items.length}
+            alreadyApproved={state.alreadyApproved} onReview={onReview} />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 16 }}>
+            <button className="btn btn-secondary btn-sm" onClick={onStartReview}>Review all</button>
+            <button className="btn btn-ghost btn-sm" onClick={onExpand}>One by one</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

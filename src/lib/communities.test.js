@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Parser } from 'sparqljs';
-import { findSharedTerms, findSimilarTerms, labelTokens, pairKey, normalizeLabel, mergeMappings, MAPPING_RELATIONS, approvalsNeeded } from './communities';
+import { findSharedTerms, findSimilarTerms, labelTokens, pairKey, normalizeLabel, mergeMappings, MAPPING_RELATIONS, approvalsNeeded, linksOf, inverseRelation } from './communities';
 import * as gov from './governance';
 
 const SKOS = 'http://www.w3.org/2004/02/skos/core#';
@@ -224,5 +224,31 @@ describe('approvalsNeeded (owner approval)', () => {
   });
   it('needs nobody when owner approval is off', () => {
     expect(accounts({ type: 'modify', termUri: 'cs:Model' }, { ...ctx, requireOwnerApproval: false })).toEqual([]);
+  });
+});
+
+describe('linksOf (which terms reference a concept)', () => {
+  const S = 'http://www.w3.org/2004/02/skos/core#';
+  const CLASS = 'http://example.org/dt#Model';
+  const m = (source, rel, target, status) => ({ source, relation: `${S}${rel}`, target, status, proposal: null });
+
+  it('lists terms mapped to a concept in either direction, read from the term side, without rejected or retired links', () => {
+    const links = linksOf(CLASS, [
+      m('urn:se:Model', 'closeMatch', CLASS, 'pending'),
+      m(CLASS, 'narrowMatch', 'urn:ms:Model', 'approved'), // Model narrower-than ms:Model ⇔ ms:Model broader-than Model
+      m('urn:te:Model', 'relatedMatch', CLASS, 'rejected'),
+      m('urn:x:Old', 'exactMatch', CLASS, 'retired'),
+      m('urn:a', 'exactMatch', 'urn:b', 'approved'),
+      m('urn:se:Model', 'closeMatch', CLASS, 'pending'), // listed once
+    ]);
+    expect(links.map(l => [l.uri, l.relation.replace(S, ''), l.status])).toEqual([
+      ['urn:ms:Model', 'broadMatch', 'approved'],
+      ['urn:se:Model', 'closeMatch', 'pending'],
+    ]);
+  });
+
+  it('inverts only broad/narrow', () => {
+    expect(inverseRelation(`${S}broadMatch`)).toBe(`${S}narrowMatch`);
+    expect(inverseRelation(`${S}closeMatch`)).toBe(`${S}closeMatch`);
   });
 });

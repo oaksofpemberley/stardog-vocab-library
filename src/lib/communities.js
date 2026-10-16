@@ -103,6 +103,36 @@ export function mergeMappings(triples, proposals) {
   return rows;
 }
 
+/** The same mapping read from the other end: A broader-than B ⇔ B narrower-than A; the rest are symmetric */
+export function inverseRelation(iri) {
+  if (iri === `${SKOS}broadMatch`) return `${SKOS}narrowMatch`;
+  if (iri === `${SKOS}narrowMatch`) return `${SKOS}broadMatch`;
+  return iri;
+}
+
+const LINK_STATUS_ORDER = ['approved', 'asserted', 'pending'];
+
+/**
+ * Everything linked to `uri` by a mapping (from mergeMappings) that is in force or proposed:
+ * asserted, approved or pending; rejected and retired links are left out. The relation is read
+ * from the other term's side ("<other> broad match <uri>"), so for a class this answers
+ * "which terms reference this concept, and how".
+ * @returns {{uri, relation, status, proposal}[]} approved first, then asserted, then pending
+ */
+export function linksOf(uri, mappings) {
+  const out = new Map();
+  for (const m of mappings) {
+    if (!LINK_STATUS_ORDER.includes(m.status)) continue;
+    let link = null;
+    if (m.target === uri && m.source !== uri) link = { uri: m.source, relation: m.relation };
+    else if (m.source === uri && m.target !== uri) link = { uri: m.target, relation: inverseRelation(m.relation) };
+    if (!link) continue;
+    const k = `${link.uri}|${link.relation}|${m.status}`;
+    if (!out.has(k)) out.set(k, { ...link, status: m.status, proposal: m.proposal || null });
+  }
+  return [...out.values()].sort((a, b) => LINK_STATUS_ORDER.indexOf(a.status) - LINK_STATUS_ORDER.indexOf(b.status));
+}
+
 /* ── Owner approval: who must approve a proposal ── */
 
 /** Groups a term belongs to (a scheme is its own group). schemeUris: Set of scheme IRIs */

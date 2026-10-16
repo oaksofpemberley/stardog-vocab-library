@@ -112,6 +112,39 @@ Stardog can already store SKOS vocabularies and mappings and expose them to quer
 
 All five were verified on 2026-10-09.
 
+### R7. Create and edit a group's terms where people work
+A vocabulary term is not an ontology concept. Each group writes down the words it uses; linking a word to the shared ontology is a separate, later step (R9).
+- R7.1 Each group card has **Add term**. It opens an "Add term" proposal with the group already chosen: label (required), definition (optional), IRI (suggested from the group's namespace and the label, editable).
+- R7.2 Each concept in a group's list, and each SKOS concept's own page, has **Edit**. It opens a "Modify term" proposal filled with the current label and definition. Only the fields that changed are proposed; a proposal that changes nothing cannot be sent.
+- R7.3 New terms and edits go through the existing proposal flow (R4): nothing changes in the vocabulary until a reviewer approves, and owner approval (R5) applies.
+- R7.4 A new term's IRI must not already be used by any term in the database or by another pending "Add term" proposal. The form says which term already uses it.
+- R7.5 Unsent input is kept as a draft per group or term, so it never overwrites the Review Queue's own draft.
+
+**Accepted when:** adding "test article" to Test & Evaluation from its group card and approving it puts a `skos:Concept` with that label and `skos:inScheme te:Scheme` in `urn:vocab:test`; editing its definition from the group list and approving it replaces the definition; proposing a term whose IRI exists is refused with the existing term named.
+
+### R8. Bulk add terms to a group
+- R8.1 Each group card has **Bulk add**. The user pastes rows or opens a `.csv`, `.tsv` or `.txt` file. Columns are `label`, `definition`, `iri` (a header row in any order is recognised; without one the columns are taken in that order). Comma- or tab-separated, with quoted fields as in RFC 4180.
+- R8.2 Before sending, a preview lists every row with its IRI and one of:
+  - **new**;
+  - **also used by** other groups (a shared term, allowed: this is the point of groups);
+  - **error**, not sent: missing label, invalid IRI, IRI already used (R7.4), IRI repeated in the batch, or label already in this group.
+- R8.3 Sending creates one "Add term" proposal per valid row, all in **one** update request (all or none), tagged with a shared batch id and the batch size.
+- R8.4 In the Review Queue, a batch shows as one card ("Bulk add: 25 terms to Test & Evaluation") listing its terms. A reviewer can approve or reject the whole batch in one request, or open it and review terms one by one.
+- R8.5 At most 500 rows per batch.
+
+**Accepted when:** pasting 5 rows (one with no label, one repeating an existing IRI, one whose label another group uses) previews 3 valid rows with the shared label flagged; sending creates 3 pending proposals in one batch; "Approve all" adds the 3 concepts and writes 3 approval audit entries in one request.
+
+### R9. Link terms to the ontology, and find every term that references a concept
+- R9.1 A term is linked to an ontology class (any `owl:Class` that is not a SKOS concept) with the SKOS mapping relations of R3, governed the same way. Linking is optional and can happen any time after the term exists.
+- R9.2 Each concept in a group's list, and each SKOS concept's page, has **Link to ontology**: a mapping proposal with that term as the source and only ontology classes offered as targets. The group list shows each term's current links, or "not linked yet".
+- R9.3 Every term page (class or concept) shows **Vocabulary terms that reference this**: each term from any group that is mapped to it, in either direction, with its group, the relation read from the term's side, and whether the link is asserted, approved or pending. Rejected and retired links are not listed.
+- R9.4 The Designer's detail panel shows the same list for the selected class.
+- R9.5 `vocab-gov references <iri>` prints the same list as JSON.
+
+**Accepted when:** in the MBSE demo, linking Systems Engineering "requirement" (exact match, approved) and Test & Evaluation "requirement" (related match, left pending) to `dt:Requirement`, then opening `dt:Requirement`, lists both terms with their groups and statuses; the same two appear in the Designer panel and in `vocab-gov references`; the group lists show each link, and the link form offers only ontology classes.
+
+R7–R9 were verified on 2026-10-16 on a copy of the MBSE demo database.
+
 ### Non-functional requirements
 - N1 All user-supplied text is escaped and all IRIs validated (`sparqlString` / `sparqlIri`). No raw interpolation into SPARQL.
 - N2 Nothing typed is lost on refresh. The selected view and shared label live in the URL, and unsent proposal input is kept as a draft.
@@ -142,6 +175,8 @@ Governance data stays in `VOCAB:GOVERNANCE` (namespace `gov: <http://vocab.gov/o
 | `gov:appliedDate` | set when an approval applied the change |
 
 The proposal record is the mapping's provenance (who proposed it, why, who approved it, when). This follows the spirit of SSSOM mapping metadata without needing a separate store. Approved mappings themselves are plain SKOS triples in `VOCAB:MAPPINGS`.
+
+Bulk proposals also carry `gov:proposalBatch` (shared id) and `gov:batchSize`.
 
 Group owner = steward of the `skos:ConceptScheme` (existing `gov:hasSteward`), so ownership has the same audit trail as stewardship.
 
@@ -176,3 +211,4 @@ The **Review Queue** "New proposal" form gains the add/modify fields and the map
 - Semantic matching of definitions. Similar-wording suggestions are lexical (labels only). Voicebox or embeddings could also compare definitions and suggest a relation.
 - Editing language-tagged labels per language.
 - OWL classes as group members (groups are SKOS concept schemes; OWL ontologies would need a membership convention such as `rdfs:isDefinedBy`).
+- Alternative labels in new terms, and bulk import from SKOS files (for example exported from another vocabulary editor). Bulk add takes CSV/TSV only.

@@ -2,9 +2,34 @@ import { useState, useEffect } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import { assignSteward, setRequireOwnerApproval } from '../lib/governance';
 import { toPrefixed, listUsers } from '../lib/sparql';
+import { linksOf, relationLabel, inverseRelation } from '../lib/communities';
 import { useCommunityData } from '../lib/useCommunityData';
 import { useDraft } from '../lib/useDraft';
-import { Users, UserCheck, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
+import ProposalModal from './ProposalModal';
+import BulkAddTerms from './BulkAddTerms';
+import { Users, UserCheck, ChevronDown, ChevronRight, ShieldCheck, Plus, Layers, Pencil, Link2 } from 'lucide-react';
+
+/**
+ * The proposal forms a group or term opens (R7–R9), pre-filled. Each keeps its own draft.
+ * modal: { kind: 'add' | 'bulk', scheme } or { kind: 'edit' | 'link', concept }
+ */
+export function TermModals({ modal, community, onClose, onCreated }) {
+  const { db } = useStardog();
+  if (!modal) return null;
+  const c = modal.concept;
+  if (modal.kind === 'bulk') return <BulkAddTerms scheme={modal.scheme} community={community} onClose={onClose} onCreated={onCreated} />;
+  if (modal.kind === 'add') {
+    return <ProposalModal community={community} draftKey={`${db}:proposal:add:${modal.scheme}`} fixedType heading="Add term"
+      initial={{ type: 'add', scheme: modal.scheme }} onClose={onClose} onCreated={onCreated} />;
+  }
+  if (modal.kind === 'edit') {
+    return <ProposalModal community={community} draftKey={`${db}:proposal:edit:${c.uri}`} fixedType heading="Edit term"
+      initial={{ type: 'modify', termUri: c.uri, label: c.prefLabel || '', definition: c.definition || '', origLabel: c.prefLabel || '', origDefinition: c.definition || '' }}
+      onClose={onClose} onCreated={onCreated} />;
+  }
+  return <ProposalModal community={community} draftKey={`${db}:proposal:link:${c.uri}`} fixedType ontologyTargets heading="Link to ontology"
+    initial={{ type: 'mapping', source: c.uri }} onClose={onClose} onCreated={onCreated} />;
+}
 
 /** Communities > Groups: each SKOS concept scheme as a group with an owner and its concepts */
 export default function GroupsView() {
@@ -14,6 +39,7 @@ export default function GroupsView() {
   // Stardog accounts to suggest as owners (often just the user's own: most accounts may only list themselves)
   const [accounts, setAccounts] = useState(null);
   const [settingError, setSettingError] = useState(null);
+  const [modal, setModal] = useState(null);
   useEffect(() => { listUsers(endpoint, token).then(setAccounts); }, [endpoint, token]);
 
   if (loading) return <div className="page-pad muted">Loading groups…</div>;
@@ -72,16 +98,18 @@ export default function GroupsView() {
         <div className="group-grid">
           {schemes.map(s => (
             <GroupCard key={s.uri} scheme={s} data={data} accounts={accounts} ownerApprovalOn={settings.requireOwnerApproval}
-              concepts={conceptsOf(s.uri)} mappingCount={mappingCount(s.uri)} />
+              concepts={conceptsOf(s.uri)} mappingCount={mappingCount(s.uri)} onOpen={setModal} />
           ))}
         </div>
       )}
+      <TermModals modal={modal} community={data} onClose={() => setModal(null)} onCreated={data.reload} />
     </div>
   );
 }
 
-function GroupCard({ scheme, data, accounts, ownerApprovalOn, concepts, mappingCount }) {
-  const { endpoint, db, token, connection, refreshGovernance, identity } = useStardog();
+function GroupCard({ scheme, data, accounts, ownerApprovalOn, concepts, mappingCount, onOpen }) {
+  const { endpoint, db, token, connection, refreshGovernance, identity, classes } = useStardog();
+  const classLabel = (uri) => classes.find(c => c.uri === uri)?.label || toPrefixed(uri);
   // Owner input: a Stardog account (can be required to approve) or just a name
   const [draft, setDraft] = useDraft(`${db}:owner-v2:${scheme.uri}`, { kind: 'account', value: '' });
   const [expanded, setExpanded] = useState(false);
@@ -153,17 +181,38 @@ function GroupCard({ scheme, data, accounts, ownerApprovalOn, concepts, mappingC
       )}
       {saveError && <div className="connection-status error" role="alert" style={{ marginTop: 8 }}>{saveError}</div>}
 
-      <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={() => setExpanded(!expanded)}>
-        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {expanded ? 'Hide' : 'Show'} concepts
-      </button>
+      <div className="group-actions">
+        <button className="btn btn-secondary btn-sm" onClick={() => onOpen({ kind: 'add', scheme: scheme.uri })}><Plus size={13} /> Add term</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => onOpen({ kind: 'bulk', scheme: scheme.uri })}><Layers size={13} /> Bulk add</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => setExpanded(!expanded)}>
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {expanded ? 'Hide' : 'Show'} terms
+        </button>
+      </div>
       {expanded && (
         <dl className="concept-list">
-          {concepts.map(c => (
-            <div key={c.uri}>
-              <dt>{c.prefLabel || toPrefixed(c.uri)}{c.altLabels.length > 0 && <span className="muted"> ({c.altLabels.join(', ')})</span>}</dt>
-              <dd>{c.definition || <span className="muted">No definition</span>}</dd>
-            </div>
-          ))}
+          {concepts.map(c => {
+            // Links to ontology classes (anything mapped that is not a group's term), read from this term's side
+            const links = linksOf(c.uri, data.mappings).filter(l => !data.conceptByUri.has(l.uri));
+            return (
+              <div key={c.uri} className="concept-item">
+                <dt>
+                  <span>{c.prefLabel || toPrefixed(c.uri)}{c.altLabels.length > 0 && <span className="muted"> ({c.altLabels.join(', ')})</span>}</span>
+                  <span className="concept-actions">
+                    <button className="btn btn-ghost btn-xs" onClick={() => onOpen({ kind: 'edit', concept: c })} aria-label={`Edit ${c.prefLabel}`}><Pencil size={12} /> Edit</button>
+                    <button className="btn btn-ghost btn-xs" onClick={() => onOpen({ kind: 'link', concept: c })} aria-label={`Link ${c.prefLabel} to ontology`}><Link2 size={12} /> Link to ontology</button>
+                  </span>
+                </dt>
+                <dd>{c.definition || <span className="muted">No definition</span>}</dd>
+                <dd className="concept-links">
+                  {links.length === 0 ? <span className="muted">Not linked to the ontology yet</span> : links.map(l => (
+                    <span key={`${l.uri}|${l.relation}|${l.status}`} className={`link-chip link-${l.status}`} title={l.uri}>
+                      {relationLabel(inverseRelation(l.relation))} → {classLabel(l.uri)}{l.status === 'pending' && ' (pending)'}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
       )}
     </div>

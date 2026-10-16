@@ -11,7 +11,7 @@ import { parseArgs } from 'node:util';
 import * as gov from '../src/lib/governance.js';
 import { querySparql, listDatabases, requestToken, fetchIdentity, getBindings, val, getLocalName } from '../src/lib/sparql.js';
 import { CLASSES_QUERY, PROPERTIES_QUERY, SCHEMES_QUERY, CONCEPTS_QUERY, MAPPINGS_QUERY, isBuiltInTerm, propertiesFromBindings } from '../src/lib/ontologyQueries.js';
-import { MAPPING_RELATIONS, relationLabel, mergeMappings, approvalsNeeded, schemesOf } from '../src/lib/communities.js';
+import { MAPPING_RELATIONS, relationLabel, mergeMappings, approvalsNeeded, schemesOf, linksOf } from '../src/lib/communities.js';
 
 const HELP = `vocab-gov: Vocabulary Library governance from the command line. Prints JSON.
 
@@ -24,6 +24,7 @@ Read:
   term <iri>                         One term: status, steward, groups, notes, mappings, history
   groups                             Groups (SKOS concept schemes) and their owners
   mappings [--term iri]              Mappings: approved, asserted, pending, rejected, retired
+  references <iri>                   Groups' terms mapped to this term or class (approved, asserted, pending)
   proposals [--status s]             Change proposals (pending, approved, rejected)
   history [--term iri]               Audit log, newest first (at most 200 entries)
 
@@ -103,13 +104,18 @@ async function loadVocabulary(c, { withProperties = false } = {}) {
   return v;
 }
 
-async function loadMappings(c) {
+/** Mappings in the data merged with mapping proposals, as the app's Mappings view shows them */
+async function loadMergedMappings(c) {
   const [rows, proposals] = await Promise.all([
     querySparql(c.endpoint, c.db, c.token, MAPPINGS_QUERY).then(getBindings),
     gov.fetchProposals(c.endpoint, c.db, c.token).catch(() => []),
   ]);
   const triples = rows.map(b => ({ source: val(b, 'source'), relation: val(b, 'relation'), target: val(b, 'target'), graph: val(b, 'g') }));
-  return mergeMappings(triples, proposals).map(m => ({
+  return mergeMappings(triples, proposals);
+}
+
+async function loadMappings(c) {
+  return (await loadMergedMappings(c)).map(m => ({
     source: m.source, relation: relationLabel(m.relation), target: m.target, status: m.status, graph: m.graph || null,
     proposal: m.proposal?.id || null, justification: m.proposal?.description || null,
     removalPending: m.removalPending?.id || null, retiredBy: m.retiredBy?.id || null,
@@ -161,6 +167,20 @@ const commands = {
   async mappings(c) {
     const all = await loadMappings(c);
     return opts.term ? all.filter(m => m.source === opts.term || m.target === opts.term) : all;
+  },
+
+  async references(c, [uri]) {
+    need(uri, 'term or class IRI');
+    const [v, merged] = await Promise.all([loadVocabulary(c), loadMergedMappings(c)]);
+    const termOf = new Map(v.terms.map(t => [t.uri, t]));
+    const schemeOf = new Map(v.concepts.map(x => [x.uri, x.scheme]));
+    const groupLabel = new Map(v.schemes.map(s => [s.uri, s.label]));
+    // Only groups' terms (SKOS concepts), as on the term page; the relation is read from the term's side
+    return linksOf(uri, merged).filter(l => schemeOf.has(l.uri)).map(l => ({
+      term: l.uri, label: termOf.get(l.uri)?.label || getLocalName(l.uri),
+      group: schemeOf.get(l.uri) || null, groupLabel: groupLabel.get(schemeOf.get(l.uri)) || null,
+      relation: relationLabel(l.relation), status: l.status, proposal: l.proposal?.id || null,
+    }));
   },
 
   async proposals(c) {

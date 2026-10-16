@@ -11,6 +11,7 @@ A modern, browser-based vocabulary governance tool for browsing, managing, and a
 - **Governance Workflows** — Assign lifecycle statuses (Active, Draft, Under Review, Deprecated, Retired) to any term with full audit logging
 - **Communities** — Each group's SKOS concept scheme shown with its owner; **Shared Terms** puts one label's different meanings side by side and suggests similarly worded terms to map; **Mappings** lists asserted, approved, pending, rejected and retired mappings between groups (see [docs/communities-and-mappings.md](docs/communities-and-mappings.md))
 - **Governed changes** — Proposals to add, modify, deprecate, map terms or remove a mapping go through review; approving one applies the change (mappings go to the `VOCAB:MAPPINGS` graph) together with its audit entry
+- **Term authoring** — Add a group's terms one at a time or in bulk (paste or open a CSV/TSV, with a preview that flags duplicates and labels other groups use), edit them, and link them to ontology classes; a class's page and the Designer list every group's term that references it
 - **Accounts and owner approval** — Optional sign-in with your Stardog account; group owners can be Stardog accounts, and an optional rule requires the owners of affected groups to approve changes (both owners for a mapping between two groups)
 - **Designer View** — Hierarchical class diagram with property counts and lifecycle status
 - **Impact Analysis** — Analyze upstream/downstream dependencies before making changes to your vocabulary
@@ -228,6 +229,7 @@ npm run gov -- propose mapping --db my_db --source <iri> --relation closeMatch -
   --title "CS model ~ physics model" --description "Both are predictive models"
 npm run gov -- proposals --status pending --db my_db   # includes requiredOwners and approvedBy
 npm run gov -- review <proposal-iri-or-ending> approve --db my_db
+npm run gov -- references <class-or-term-iri> --db my_db   # every group's term mapped to it
 ```
 
 - **Credentials:** set `STARDOG_TOKEN`, or `STARDOG_USERNAME` + `STARDOG_PASSWORD` (exchanged for a token). They are read from the environment first, then from `.env`.
@@ -280,6 +282,7 @@ src/
 ├── components/
 │   ├── AnalyticsView.jsx      # Vocabulary health dashboard
 │   ├── AuditLog.jsx           # Change history viewer
+│   ├── BulkAddTerms.jsx       # Bulk add a group's terms from pasted rows or a CSV/TSV file
 │   ├── CommunityParts.jsx     # Mapping badges and the propose-mapping form
 │   ├── ConnectionSetup.jsx    # Stardog connection form
 │   ├── DesignerView.jsx       # Hierarchical class diagram
@@ -292,17 +295,20 @@ src/
 │   ├── ImportExport.jsx       # Vocabulary export (Turtle/JSON-LD/CSV)
 │   ├── MappingsView.jsx       # Communities: all mappings and their status
 │   ├── NamespaceSidebar.jsx   # Namespace-grouped term list
+│   ├── ProposalModal.jsx      # The change-proposal form (also opened pre-filled from groups and terms)
 │   ├── ReviewQueue.jsx        # Governance review workflow
 │   ├── SearchBar.jsx          # Search and filter controls
 │   ├── SharedTermsView.jsx    # Communities: same term, different meanings
-│   └── TermDetail.jsx         # Class/property detail view
+│   ├── TermDetail.jsx         # Class/property detail view
+│   └── TermReferences.jsx     # Groups' terms that reference a class, and a term's ontology links
 ├── contexts/
 │   └── StardogContext.jsx     # Stardog connection & data state
 ├── lib/
 │   ├── sparql.js              # SPARQL client, escaping (sparqlString/sparqlIri)
 │   ├── governance.js          # Governance reads/writes (VOCAB:GOVERNANCE graph)
 │   ├── ontologyQueries.js     # Ontology, scheme, concept and mapping queries
-│   ├── communities.js         # Shared-term detection, mapping relations, who must approve
+│   ├── communities.js         # Shared-term detection, mapping relations, links, who must approve
+│   ├── terms.js               # New terms: suggested IRIs, CSV/TSV parsing, checks before proposing
 │   ├── useCommunityData.js    # Data for the Communities views
 │   ├── exporters.js           # Turtle / JSON-LD / CSV export
 │   ├── layout.js              # Cycle-safe diagram layering

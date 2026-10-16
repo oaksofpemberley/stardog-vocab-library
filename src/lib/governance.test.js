@@ -159,3 +159,48 @@ describe('refused writes', () => {
     expect(describeUpdateError(400, '{"message":"bad query"}')).toBe('SPARQL Update Error (400): bad query');
   });
 });
+
+describe('bulk add (one batch, one request)', () => {
+  const rows = ['alpha', 'beta', 'gamma'].map(l => ({ ...ADD, proposedIri: `urn:new:${l}`, proposedLabel: l, title: `Add "${l}"` }));
+
+  it('creates every proposal and audit entry in one request, tagged with a shared batch', async () => {
+    const { batch, ids } = await gov.createProposals('E', 'db', '', rows);
+    expect(sent).toHaveLength(1);
+    const triples = operations(sent[0])[0].insert[0].triples;
+    expect(ids).toHaveLength(3);
+    for (const id of ids) {
+      const own = triples.filter(t => t.subject.value === id);
+      expect(own.find(t => t.predicate.value.endsWith('proposalBatch')).object.value).toBe(batch);
+      expect(own.find(t => t.predicate.value.endsWith('batchSize')).object.value).toBe('3');
+    }
+    expect(triples.filter(t => t.object.value === 'http://vocab.gov/ontology#AuditEntry')).toHaveLength(3);
+  });
+
+  it('validates every row before sending anything', async () => {
+    await expect(gov.createProposals('E', 'db', '', [...rows, { ...ADD, proposedIri: 'bad iri' }])).rejects.toThrow(/Invalid IRI/);
+    await expect(gov.createProposals('E', 'db', '', [])).rejects.toThrow(/Nothing to propose/);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('reviews a batch in one request: each term applied, audited and closed only if still pending', async () => {
+    // findHome() reads the scheme's graph first; answer it, then capture the update
+    const queries = [];
+    vi.stubGlobal('fetch', async (url, opts) => {
+      const isQuery = String(url).includes('/query');
+      (isQuery ? queries : sent).push(opts.body);
+      const json = isQuery
+        ? { results: { bindings: [{ g: { type: 'uri', value: 'urn:vocab:test' }, type: { type: 'uri', value: 'http://www.w3.org/2004/02/skos/core#ConceptScheme' } }] } }
+        : {};
+      return { ok: true, json: async () => json, text: async () => JSON.stringify(json) };
+    });
+    const proposals = rows.map((r, i) => ({ ...r, id: `urn:p:${i}` }));
+    await gov.reviewProposals('E', 'db', '', proposals, 'approved', 'Rev', 'ok');
+    expect(queries).toHaveLength(1); // the scheme's home graph is looked up once
+    expect(sent).toHaveLength(1);
+    const ops = operations(sent[0]);
+    const inserts = ops.flatMap(op => op.insert || []).filter(q => q.name?.value === 'urn:vocab:test');
+    expect(inserts.flatMap(q => q.triples).filter(t => t.predicate.value.endsWith('prefLabel')).map(t => t.object.value)).toEqual(['alpha', 'beta', 'gamma']);
+    // every operation is guarded by its own proposal still being pending
+    for (const op of ops) expect(JSON.stringify(op.where)).toContain('"pending"');
+  });
+});

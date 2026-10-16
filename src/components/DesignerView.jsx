@@ -2,6 +2,8 @@ import { useRef, useEffect, useState, useMemo } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import { toPrefixed, getNamespace, getLocalName, statusKey } from '../lib/sparql';
 import { assignLayers } from '../lib/layout';
+import { useCommunityData } from '../lib/useCommunityData';
+import TermReferences from './TermReferences';
 import * as d3 from 'd3';
 
 /* ── Color palette — one distinct color per class ── */
@@ -39,6 +41,8 @@ function wrapLabel(text, maxChars = 12) {
 
 export default function DesignerView() {
   const { classes, properties, getTermStatus } = useStardog();
+  // Which groups' terms reference the selected class (R9)
+  const community = useCommunityData();
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -401,6 +405,7 @@ export default function DesignerView() {
               {selectedNode.status}
             </span>
           </div>
+          <TermReferences uri={selectedNode.id} community={community} compact />
           {selectedProps.length > 0 && (
             <div className="designer-detail-section">
               <div className="designer-detail-section-title">Properties ({selectedProps.length})</div>

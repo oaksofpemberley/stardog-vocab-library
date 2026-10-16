@@ -2,14 +2,19 @@ import { useState, useEffect } from 'react';
 import { useStardog } from '../contexts/StardogContext';
 import GovernancePanel from './GovernancePanel';
 import ImpactAnalysis from './ImpactAnalysis';
+import TermReferences from './TermReferences';
+import { TermModals } from './GroupsView';
 import { toPrefixed, getNamespace, getLocalName, statusKey } from '../lib/sparql';
 import { propertiesForClass, instanceCountQuery } from '../lib/ontologyQueries';
 import { querySparql, getBindings, val } from '../lib/sparql';
 import { readHash, updateHash } from '../lib/urlState';
-import { Hash, Link2, ExternalLink, Shield, ChevronRight, FileText, AlertTriangle } from 'lucide-react';
+import { Hash, Link2, ExternalLink, Shield, ChevronRight, FileText, AlertTriangle, Pencil } from 'lucide-react';
 
-export default function TermDetail({ term }) {
-  const { endpoint, db, token, properties: allProps, instanceCounts, shaclShapes, getTermStatus } = useStardog();
+export default function TermDetail({ term, community }) {
+  const { endpoint, db, token, properties: allProps, instanceCounts, shaclShapes, getTermStatus, classes } = useStardog();
+  const [modal, setModal] = useState(null);
+  // A group's term (SKOS concept) can be edited and linked to the ontology from here (R7, R9)
+  const concept = community?.conceptByUri.get(term.uri);
   // The open tab is kept in the URL so a refresh returns to it
   const [activeTab, setActiveTabState] = useState(() => readHash().get('tab') || 'overview');
   const setActiveTab = (tab) => { setActiveTabState(tab); updateHash({ tab: tab === 'overview' ? null : tab }); };
@@ -69,6 +74,14 @@ export default function TermDetail({ term }) {
           </div>
           <span className={`status-badge status-${statusKey(status)}`}>{status === 'UnderReview' ? 'Under Review' : status}</span>
         </div>
+        {concept && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setModal({ kind: 'edit', concept })}><Pencil size={13} /> Edit</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setModal({ kind: 'link', concept })}><Link2 size={13} /> Link to ontology</button>
+            {concept.scheme && <span className="muted" style={{ fontSize: '0.78rem', alignSelf: 'center' }}>Term in {community.schemeLabel(concept.scheme)}</span>}
+          </div>
+        )}
+        <TermModals modal={modal} community={community} onClose={() => setModal(null)} onCreated={community?.reload} />
         {term.comment && (
           <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
             {term.comment}
@@ -95,6 +108,12 @@ export default function TermDetail({ term }) {
             {isClass && <MetaCard label="Properties" value={termProps.length} />}
             {isClass && <MetaCard label="SHACL Constraints" value={constraints.length} />}
           </div>
+
+          {/* Which groups' terms reference this (R9) */}
+          {isClass && community && term.type !== 'skos:ConceptScheme' && (
+            <TermReferences uri={term.uri} community={community}
+              labelOf={(uri) => classes.find(c => c.uri === uri)?.label || toPrefixed(uri)} />
+          )}
 
           {/* Properties table (for classes) */}
           {isClass && termProps.length > 0 && (

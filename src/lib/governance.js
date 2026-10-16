@@ -19,6 +19,7 @@ const OWL_DEPRECATED = '<http://www.w3.org/2002/07/owl#deprecated>';
 
 export const STATUSES = ['Draft', 'UnderReview', 'Active', 'Deprecated', 'Retired'];
 export const PROPOSAL_TYPES = ['add', 'modify', 'deprecate', 'mapping', 'unmap'];
+export const PROPOSAL_TYPE_LABEL = { add: 'Add term', modify: 'Modify term', deprecate: 'Deprecate term', mapping: 'Map terms', unmap: 'Remove mapping' };
 const DECISIONS = ['approved', 'rejected'];
 
 /** Governance-vocabulary predicate/class IRI */
@@ -177,6 +178,29 @@ export async function fetchNotes(endpoint, db, token, termUri) {
  *   unmap:     the same three fields, naming an approved mapping to remove; description = reason
  */
 export async function createProposal(endpoint, db, token, proposal) {
+  const { id, triples } = proposalTriples(proposal);
+  await updateSparql(endpoint, db, token, `INSERT DATA { GRAPH ${G} { ${triples} } }`);
+  return id;
+}
+
+/**
+ * Create several proposals (e.g. a bulk add of terms) in ONE update request, so all are
+ * created or none. They share a batch id, so the Review Queue can show and review them together.
+ * @returns {{batch: string, ids: string[]}}
+ */
+export async function createProposals(endpoint, db, token, proposals) {
+  if (proposals.length === 0) throw new Error('Nothing to propose.');
+  if (proposals.length > MAX_PROPOSALS_PER_REQUEST) throw new Error(`At most ${MAX_PROPOSALS_PER_REQUEST} proposals at a time.`);
+  const batch = newId('batch');
+  const built = proposals.map(p => proposalTriples(p, { batch, batchSize: proposals.length }));
+  await updateSparql(endpoint, db, token, `INSERT DATA { GRAPH ${G} { ${built.map(b => b.triples).join('\n')} } }`);
+  return { batch, ids: built.map(b => b.id) };
+}
+
+export const MAX_PROPOSALS_PER_REQUEST = 500;
+
+/** Triples for one proposal and its audit entry (no GRAPH wrapper), validated */
+function proposalTriples(proposal, { batch, batchSize } = {}) {
   const { type, title, description, proposedBy, changes,
     proposedLabel, proposedDefinition, proposedIri, proposedScheme,
     mappingSource, mappingRelation, mappingTarget } = proposal;
@@ -199,10 +223,10 @@ export async function createProposal(endpoint, db, token, proposal) {
   }
   const opt = (pred, value, asIri = false) => (value ? `${g(pred)} ${asIri ? iri(value) : str(value)} ;` : '');
   const id = newId('proposal');
-  const update = `
-    INSERT DATA {
-      GRAPH ${G} {
+  const triples = `
         ${iri(id)} a ${g('ChangeProposal')} ;
+          ${opt('proposalBatch', batch, true)}
+          ${batch ? `${g('batchSize')} ${Number(batchSize)} ;` : ''}
           ${termUri ? `${g('targetTerm')} ${iri(termUri)} ;` : ''}
           ${opt('proposedLabel', proposedLabel)}
           ${opt('proposedDefinition', proposedDefinition)}
@@ -219,19 +243,15 @@ export async function createProposal(endpoint, db, token, proposal) {
           ${g('proposedDate')} ${now()} ;
           ${g('proposalStatus')} "pending" ;
           ${g('proposedChanges')} ${str(JSON.stringify(changes || {}))} .
-        ${auditTriples(termUri || id, 'proposal_created', proposedBy, title)}
-      }
-    }
-  `;
-  await updateSparql(endpoint, db, token, update);
-  return id;
+        ${auditTriples(termUri || id, 'proposal_created', proposedBy, title)}`;
+  return { id, triples };
 }
 
 /** Fetch all proposals */
 export async function fetchProposals(endpoint, db, token) {
   const query = `
     SELECT ?id ?term ?type ?title ?desc ?by ?byAccount ?date ?status ?reviewer ?reviewerAccount ?reviewComment ?applied
-           ?pLabel ?pDef ?pIri ?pScheme ?mSource ?mRelation ?mTarget WHERE {
+           ?pLabel ?pDef ?pIri ?pScheme ?mSource ?mRelation ?mTarget ?batch ?batchSize WHERE {
       GRAPH ${G} {
         ?id a ${g('ChangeProposal')} ;
             ${g('proposalType')} ?type ;
@@ -253,6 +273,8 @@ export async function fetchProposals(endpoint, db, token) {
         OPTIONAL { ?id ${g('mappingSource')} ?mSource }
         OPTIONAL { ?id ${g('mappingRelation')} ?mRelation }
         OPTIONAL { ?id ${g('mappingTarget')} ?mTarget }
+        OPTIONAL { ?id ${g('proposalBatch')} ?batch }
+        OPTIONAL { ?id ${g('batchSize')} ?batchSize }
       }
     }
     ORDER BY DESC(?date)
@@ -266,6 +288,7 @@ export async function fetchProposals(endpoint, db, token) {
     proposedLabel: val(b, 'pLabel'), proposedDefinition: val(b, 'pDef'),
     proposedIri: val(b, 'pIri'), proposedScheme: val(b, 'pScheme'),
     mappingSource: val(b, 'mSource'), mappingRelation: val(b, 'mRelation'), mappingTarget: val(b, 'mTarget'),
+    batch: val(b, 'batch'), batchSize: Number(val(b, 'batchSize') || 0),
   }));
 }
 
@@ -428,12 +451,30 @@ export function buildReviewUpdate(proposal, decision, reviewer, comment, homes =
  * (or, with owner approval, in the request of the last required owner). options: see buildReviewUpdate.
  */
 export async function reviewProposal(endpoint, db, token, proposal, decision, reviewer, comment, options = {}) {
-  const homes = {};
-  if (decision === 'approved' && hasStructuredChange(proposal)) {
-    if (proposal.termUri && (proposal.type === 'modify' || proposal.type === 'deprecate')) homes.term = await findHome(endpoint, db, token, proposal.termUri);
-    if (proposal.type === 'add') homes.scheme = await findHome(endpoint, db, token, proposal.proposedScheme);
+  await reviewProposals(endpoint, db, token, [proposal], decision, reviewer, comment, options);
+}
+
+/**
+ * Review several proposals (e.g. a bulk add) with the same decision in ONE update request,
+ * so all are reviewed and applied together or not at all. Each keeps its own audit entry.
+ */
+export async function reviewProposals(endpoint, db, token, proposals, decision, reviewer, comment, options = {}) {
+  if (proposals.length > MAX_PROPOSALS_PER_REQUEST) throw new Error(`At most ${MAX_PROPOSALS_PER_REQUEST} proposals at a time.`);
+  const homeCache = new Map();
+  const home = (uri) => {
+    if (!homeCache.has(uri)) homeCache.set(uri, findHome(endpoint, db, token, uri));
+    return homeCache.get(uri);
+  };
+  const updates = [];
+  for (const proposal of proposals) {
+    const homes = {};
+    if (decision === 'approved' && hasStructuredChange(proposal)) {
+      if (proposal.termUri && (proposal.type === 'modify' || proposal.type === 'deprecate')) homes.term = await home(proposal.termUri);
+      if (proposal.type === 'add') homes.scheme = await home(proposal.proposedScheme);
+    }
+    updates.push(buildReviewUpdate(proposal, decision, reviewer, comment, homes, options));
   }
-  await updateSparql(endpoint, db, token, buildReviewUpdate(proposal, decision, reviewer, comment, homes, options));
+  await updateSparql(endpoint, db, token, updates.join(' ;\n'));
 }
 
 /** Fetch audit log */
