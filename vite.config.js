@@ -53,8 +53,10 @@ export default defineConfig(({ mode }) => {
   if (mode === 'single') {
     return {
       plugins: [react(), singleFile, inlineIntoHtml],
-      // Never read .env: a token or local database name must not end up in a file people share
+      // Never read .env or VITE_* shell variables: a token or local database name must not end up
+      // in a file people share. Nothing uses this prefix, so no environment variable is exposed.
       envDir: false,
+      envPrefix: 'VOCAB_SINGLE_FILE_UNUSED_',
       define: { 'import.meta.env.VITE_STARDOG_ENDPOINT': JSON.stringify('http://localhost:5820') },
       publicDir: false,
       build: { outDir: 'dist-single', assetsInlineLimit: () => true, cssCodeSplit: false },

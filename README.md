@@ -223,7 +223,7 @@ Only the person building it needs npm. Whoever receives `vocab-library.html` jus
 
 - **Direct connection:** with no proxy, the browser calls Stardog itself. Stardog allows this by default (it answers cross-origin requests with `Access-Control-Allow-Origin: *`). The endpoint starts as `http://localhost:5820`; change it on the connection form.
 - **Sign in:** there is no shared account. Each person signs in with their own Stardog account or pastes a token, the same as the [production image](#production-image).
-- **Nothing local is baked in:** this build ignores `.env`, so no token, password or database name from your machine ends up in a file you share.
+- **Nothing local is baked in:** this build ignores `.env` and any `VITE_` variables set in your shell, so no token, password or database name from your machine ends up in a file you share.
 - **Same app:** browsing, Graph and Designer views, governed changes, the audit log and export all work as in the server version, and the database, page and selected term are kept in the URL as usual.
 - **Verified:** opened from disk in Chrome against a local Stardog: sign-in (a wrong password shows the app's error, not a browser pop-up), database list, every view, a governed write with its audit entry, CSV export and reload, with no console errors.
 
