@@ -26,3 +26,4 @@ dist-ssr
 
 # Iron Bank resource built by scripts/build-ironbank-bundle.sh
 ironbank/*.tar.gz
+dist-single

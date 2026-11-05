@@ -211,6 +211,22 @@ Open `http://<host>:8080`. The image contains only the built app and nginx, whic
   - The app worked end to end in a browser through the container with a read-only root filesystem and all capabilities dropped: sign-in, browsing, a governance write, Graph View and export, with no Content-Security-Policy violations.
   - Scan results, SBOMs and the steps to repeat every scan yourself: [docs/security-scans.md](docs/security-scans.md).
 
+## Single HTML file (no npm, Node or server)
+
+The whole app can also be built as one self-contained file (about 1.9 MB) that anyone can open by double-clicking it:
+
+```bash
+npm run build:single    # writes dist-single/vocab-library.html
+```
+
+Only the person building it needs npm. Whoever receives `vocab-library.html` just opens it in a browser; nothing is installed and nothing else is downloaded.
+
+- **Direct connection:** with no proxy, the browser calls Stardog itself. Stardog allows this by default (it answers cross-origin requests with `Access-Control-Allow-Origin: *`). The endpoint starts as `http://localhost:5820`; change it on the connection form.
+- **Sign in:** there is no shared account. Each person signs in with their own Stardog account or pastes a token, the same as the [production image](#production-image).
+- **Nothing local is baked in:** this build ignores `.env`, so no token, password or database name from your machine ends up in a file you share.
+- **Same app:** browsing, Graph and Designer views, governed changes, the audit log and export all work as in the server version, and the database, page and selected term are kept in the URL as usual.
+- **Verified:** opened from disk in Chrome against a local Stardog: sign-in (a wrong password shows the app's error, not a browser pop-up), database list, every view, a governed write with its audit entry, CSV export and reload, with no console errors.
+
 ## Command line (scripts, CI and AI agents)
 
 `bin/vocab-gov.js` does the governance work without the browser. It calls the same `src/lib` functions as the app, so the same rules apply:
