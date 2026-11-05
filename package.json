@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:single": "vite build --mode single",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

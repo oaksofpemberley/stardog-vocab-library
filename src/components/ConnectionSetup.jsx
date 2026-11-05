@@ -9,6 +9,8 @@ export default function ConnectionSetup({ onOpenHelp }) {
   // Optional personal sign-in. The password lives only in this form and is exchanged for a token.
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
+  // A full address means no proxy (e.g. the single-file build), so there is no shared connection
+  const direct = /^https?:\/\//i.test(connection.endpoint);
 
   // Offer the server's databases as a dropdown; fall back to free text if listing fails
   useEffect(() => {
@@ -83,14 +85,14 @@ export default function ConnectionSetup({ onOpenHelp }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label"><UserCheck size={12} style={{ marginRight: 4 }} />Sign in as a Stardog user (optional)</label>
+            <label className="form-label"><UserCheck size={12} style={{ marginRight: 4 }} />Sign in as a Stardog user{direct ? '' : ' (optional)'}</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input className="input" placeholder="Stardog username" autoComplete="username" value={account} onChange={e => setAccount(e.target.value)} />
               <input className="input" type="password" placeholder="Password" autoComplete="current-password" value={password}
                 onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleConnect()} />
             </div>
             <span className="form-help" style={{ margin: '4px 0 0' }}>
-              Leave empty to use the shared connection. Signing in records your Stardog account on governance actions and lets you approve changes for groups you own.
+              {direct ? 'Connecting straight to Stardog, so sign in or paste a token below.' : 'Leave empty to use the shared connection.'} Signing in records your Stardog account on governance actions and lets you approve changes for groups you own.
             </span>
           </div>
 
